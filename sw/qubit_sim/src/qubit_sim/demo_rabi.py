@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 from qubit_sim.qubit_model import QubitSim, iq_to_complex_envelope
 from qubit_sim.virtual_fpga import VirtualFPGA
+from qubit_sim.waveform_view import plot_envelope_and_iq, plot_rabi
 
 
 def sample_readout_iq(sim: QubitSim, p1: float):
@@ -79,38 +80,13 @@ def run_rabi_threshold(sim_meas: QubitSim, p1_provider, durations, shots: int, t
 
     return np.array(p1_true), np.array(p1_est)
 
-
-def show_drive_waveform(fpga: VirtualFPGA, pulse_base: dict, duration_s: float, pad_s: float):
-    """Plot the DAC-style drive waveforms from VirtualFPGA."""
-    pulse = dict(pulse_base)
-    pulse["duration"] = float(duration_s)
-
-    t, env, I_wave, Q_wave = fpga.render_iq(pulse, pad_s=float(pad_s))
-
-    plt.figure()
-    plt.plot(t * 1e9, env)
-    plt.xlabel("Time (ns)")
-    plt.ylabel("Envelope")
-    plt.title("Drive envelope (VirtualFPGA)")
-    plt.grid(True)
-
-    plt.figure()
-    plt.plot(t * 1e9, I_wave, label="I_wave")
-    plt.plot(t * 1e9, Q_wave, label="Q_wave")
-    plt.xlabel("Time (ns)")
-    plt.ylabel("Amplitude")
-    plt.title("Drive I/Q samples (VirtualFPGA)")
-    plt.grid(True)
-    plt.legend()
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--drive_source", type=str, default="param", choices=["param", "fpga"])
     ap.add_argument("--omega_max_hz", type=float, default=2e6)
     ap.add_argument("--amp", type=float, default=1.0)
     ap.add_argument("--phase", type=float, default=0.0)
-    ap.add_argument("--env", type=str, default="square", choices=["square", "gauss"])
+    ap.add_argument("--envelope", type=str, default="square", choices=["square", "gauss"])
     ap.add_argument("--sigma", type=float, default=None, help="Seconds, for gauss envelope only")
     ap.add_argument("--t_end", type=float, default=2e-6, help="Seconds")
     ap.add_argument("--points", type=int, default=81)
@@ -131,7 +107,7 @@ def main():
         "amp": float(args.amp),
         "phase": float(args.phase),
         "duration": 0.0,
-        "env": args.env,
+        "envelope": args.envelope,
     }
     if args.sigma is not None:
         pulse_base["sigma"] = float(args.sigma)
@@ -148,12 +124,10 @@ def main():
 
     # Optional waveform plot (use midpoint duration)
     if args.show_waveform:
-        show_drive_waveform(
-            fpga=fpga,
-            pulse_base=pulse_base,
-            duration_s=float(durations[len(durations) // 2]),
-            pad_s=float(args.pad_s),
-        )
+        pulse = dict(pulse_base)
+        pulse["duration"] = float(durations[len(durations) // 2])
+        t, env, I_wave, Q_wave = fpga.render_iq(pulse, pad_s=float(args.pad_s))
+        plot_envelope_and_iq(t, env, I_wave, Q_wave, unit="ns", title_prefix="VirtualFPGA ")
 
     # Choose how we compute p1 for each duration
     if args.drive_source == "param":
@@ -172,14 +146,14 @@ def main():
         label = f"threshold shots={args.shots}"
 
     # Plot results
-    plt.figure()
-    plt.plot(durations * 1e6, p1_true, linestyle="-", linewidth=2, label="p1 (model)")
-    plt.plot(durations * 1e6, p1_est, marker="o", linestyle="None", label=label)
-    plt.xlabel("Pulse duration (us)")
-    plt.ylabel("P(|1>)")
-    plt.title(f"Rabi ({args.drive_source} drive, {args.env} env, amp={args.amp}, omega_max_hz={args.omega_max_hz:g})")
-    plt.grid(True)
-    plt.legend()
+    plot_rabi(
+        durations,
+        p1_true,
+        p1_est,
+        unit="us",
+        title=f"Rabi ({args.drive_source} drive, {args.envelope} env, amp={args.amp}, omega_max_hz={args.omega_max_hz:g})",
+        est_label=label,
+    )
     plt.show()
 
 

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 from qubit_sim.virtual_fpga import VirtualFPGA
 from qubit_sim.qubit_model import QubitSim, iq_to_complex_envelope
+from qubit_sim.waveform_view import plot_envelope_and_iq
 
 
 def main():
@@ -26,21 +27,7 @@ def main():
     t, env, I_wave, Q_wave = fpga.render_iq(pulse, pad_s=200e-9)
 
     # Plot envelope and DAC sample streams
-    plt.figure()
-    plt.plot(t * 1e9, env)
-    plt.xlabel("Time (ns)")
-    plt.ylabel("Envelope")
-    plt.title("Gaussian envelope (VirtualFPGA)")
-    plt.grid(True)
-
-    plt.figure()
-    plt.plot(t * 1e9, I_wave, label="I_wave")
-    plt.plot(t * 1e9, Q_wave, label="Q_wave")
-    plt.xlabel("Time (ns)")
-    plt.ylabel("Amplitude")
-    plt.title("Drive I/Q samples (VirtualFPGA)")
-    plt.grid(True)
-    plt.legend()
+    plot_envelope_and_iq(t, env, I_wave, Q_wave, unit="ns", title_prefix="VirtualFPGA ")
 
     # 2) Feed the waveform into the qubit simulator and estimate P(|1|)
     # Convert IF I/Q to baseband complex envelope u(t)
