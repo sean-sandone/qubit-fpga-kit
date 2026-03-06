@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Lint HDL (xvlog)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$sv = Get-ChildItem -Recurse -File rtl -Include *.sv,*.svh,*.v; $vhd = Get-ChildItem -Recurse -File rtl -Include *.vhd,*.vhdl; xvlog -sv @($sv.FullName) @($vhd.FullName)"
+      ],
+      "problemMatcher": [],
+      "group": "build"
+    }
+  ]
+}
