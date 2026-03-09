@@ -151,6 +151,10 @@ class QubitSim:
             args=args,
             options={"store_states": True},
         )
+
+        if not hasattr(res, "states") or len(res.states) == 0:
+            raise RuntimeError("mesolve returned no states in pulse_p1")
+    
         self.rho = res.states[-1]
         return float(res.expect[0][-1])
 
@@ -225,7 +229,18 @@ class QubitSim:
             [0.5 * self.omega_max * sigmay(), uy],
         ]
 
-        res = mesolve(H, self.rho, t, c_ops=self.c_ops, e_ops=[self.P1])
+        res = mesolve(
+            H,
+            self.rho,
+            t,
+            c_ops=self.c_ops,
+            e_ops=[self.P1],
+            options={"store_states": True},
+        )
+
+        if not hasattr(res, "states") or len(res.states) == 0:
+            raise RuntimeError("mesolve returned no states in pulse_p1_from_envelope")
+        
         self.rho = res.final_state
         return float(res.expect[0][-1])
 
@@ -374,4 +389,5 @@ class QubitSim:
         I_ro = muI * env + self.readout_sigma * self.rng.standard_normal(n_readout)
         Q_ro = muQ * env + self.readout_sigma * self.rng.standard_normal(n_readout)
 
-        return (t_ro, I_ro, Q_ro) 
+        return (t_ro, I_ro, Q_ro)
+    
