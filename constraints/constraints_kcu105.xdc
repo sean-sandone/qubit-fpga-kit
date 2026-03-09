@@ -36,3 +36,6 @@ set_property PACKAGE_PIN R23      [get_ports GPIO_LED_6_LS]
 set_property IOSTANDARD  LVCMOS18 [get_ports GPIO_LED_6_LS] 
 set_property PACKAGE_PIN P23      [get_ports GPIO_LED_7_LS] 
 set_property IOSTANDARD  LVCMOS18 [get_ports GPIO_LED_7_LS] 
+
+## UART RX is async 
+set_false_path -from [get_ports USB_UART_TX]

@@ -4,7 +4,7 @@
 module uart_play_sender_top #(  //KCU105
     parameter int CLK_FREQ_HZ = 125_000_000,
     parameter int BAUD_RATE   = 115200,
-    parameter int unsigned STEP_HZ = 7 // used for led blink timing
+    parameter int unsigned STEP_HZ = 5 // used for led blink timing
 )(
     input  logic USB_UART_TX,   // labeled from the perspective of the USB UART transceiver chip
     output logic USB_UART_RX,   // unused here, but connected to UART entity
@@ -255,21 +255,21 @@ module uart_play_sender_top #(  //KCU105
                         din     <= msg_byte(idx + 1);
                         din_vld <= 1'b1;
                         st      <= S_PRESENT;
+                    end
                 end
-            end
 
-            S_DONE: begin
-                din_vld <= 1'b0;
-            end
+                S_DONE: begin
+                    din_vld <= 1'b0;
+                end
 
-            default: begin
-                st      <= S_IDLE;
-                idx     <= 0;
-                din     <= 8'h00;
-                din_vld <= 1'b0;
-            end
-        endcase
-    end
+                default: begin
+                    st      <= S_IDLE;
+                    idx     <= 0;
+                    din     <= 8'h00;
+                    din_vld <= 1'b0;
+                end
+            endcase
+        end
 end
 
 
@@ -286,7 +286,7 @@ end
     logic tick;
 
     logic shifting_left;     // 1 = shift left toward bit 7, 0 = shift right toward bit 0
-    logic [7:0] led_c;
+    logic [5:0] led_c;
 
 
     // Generate 1-cycle tick
@@ -297,24 +297,24 @@ end
         if (!rst_sync_n) begin
         tick_cnt       <= '0;
         shifting_left  <= 1'b1;
-        led_c          <= 8'b0000_0001;
+        led_c          <= 6'b00_0001;
         end else begin
         if (tick) begin
             tick_cnt <= '0;
 
             if (shifting_left) begin
-            if (led_c[7]) begin
+            if (led_c[5]) begin
                 shifting_left <= 1'b0;               // bounce: next go right
-                led_c         <= {1'b0, led_c[7:1]}; // 7 -> 6
+                led_c         <= {1'b0, led_c[5:1]}; // 5 -> 4
             end else begin
-                led_c <= {led_c[6:0], 1'b0};
+                led_c <= {led_c[4:0], 1'b0};
             end
             end else begin
             if (led_c[0]) begin
                 shifting_left <= 1'b1;               // bounce: next go left
-                led_c         <= {led_c[6:0], 1'b0}; // 0 -> 1
+                led_c         <= {led_c[4:0], 1'b0}; // 0 -> 1
             end else begin
-                led_c <= {1'b0, led_c[7:1]};
+                led_c <= {1'b0, led_c[5:1]};
             end
             end
 
@@ -331,7 +331,8 @@ end
     assign GPIO_LED_3_LS = led_c[3];
     assign GPIO_LED_4_LS = led_c[4];
     assign GPIO_LED_5_LS = led_c[5];
-    assign GPIO_LED_6_LS = led_c[6];
-    assign GPIO_LED_7_LS = led_c[7];
+    // Drive last two leds from tx/rx
+    assign GPIO_LED_6_LS = uart_txd;
+    assign GPIO_LED_7_LS = uart_rxd;
 
 endmodule
