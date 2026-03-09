@@ -142,8 +142,16 @@ class QubitSim:
         n_steps = int(max(10, n_steps))
         tlist = np.linspace(0.0, tp, n_steps)
 
-        res = mesolve(H, self.rho, tlist, c_ops=self.c_ops, e_ops=[self.P1], args=args)
-        self.rho = res.final_state
+        res = mesolve(
+            H,
+            self.rho,
+            tlist,
+            c_ops=self.c_ops,
+            e_ops=[self.P1],
+            args=args,
+            options={"store_states": True},
+        )
+        self.rho = res.states[-1]
         return float(res.expect[0][-1])
 
     def measure(self, pulse: dict):
@@ -252,6 +260,65 @@ class QubitSim:
         u = iq_to_complex_envelope(t, I_wave, Q_wave, if_hz=float(if_hz))
         return self.measure_from_envelope(t, u, detuning_hz=detuning_hz, max_points=max_points)
 
+    def measure_waveform_from_envelope(
+        self,
+        t: np.ndarray,
+        u: np.ndarray,
+        detuning_hz: float = 0.0,
+        max_points: int | None = 5000,
+        n_readout: int = 64,
+        readout_duration_s: float = 1.0e-6,
+        ringup_fraction: float = 0.2,
+    ):
+        """
+        Apply a baseband complex envelope u(t) and return a short readout waveform.
+
+        Returns:
+          t_ro: readout time axis, shape (n_readout,)
+          I_ro: readout I samples, shape (n_readout,)
+          Q_ro: readout Q samples, shape (n_readout,)
+
+        This models the post-ADC/post-downconversion readout stream that an FPGA might integrate.
+        It is intentionally simple: choose a single-shot outcome from p1, generate a state-dependent
+        complex mean, apply a first-order ring-up, and add white Gaussian noise.
+        """
+        p1 = self.pulse_p1_from_envelope(t, u, detuning_hz=detuning_hz, max_points=max_points)
+        return self._sample_readout_waveform(
+            p1,
+            n_readout=n_readout,
+            readout_duration_s=readout_duration_s,
+            ringup_fraction=ringup_fraction,
+        )
+
+    def measure_waveform_from_iq(
+        self,
+        t: np.ndarray,
+        I_wave: np.ndarray,
+        Q_wave: np.ndarray,
+        if_hz: float,
+        detuning_hz: float = 0.0,
+        max_points: int | None = 5000,
+        n_readout: int = 64,
+        readout_duration_s: float = 1.0e-6,
+        ringup_fraction: float = 0.2,
+    ):
+        """
+        Main waveform-returning integration point with VirtualFPGA.
+
+        Takes DAC-style IF I/Q waveforms, converts them to a baseband complex envelope u(t),
+        evolves the qubit, and returns a short readout waveform (t_ro, I_ro, Q_ro).
+        """
+        u = iq_to_complex_envelope(t, I_wave, Q_wave, if_hz=float(if_hz))
+        return self.measure_waveform_from_envelope(
+            t,
+            u,
+            detuning_hz=detuning_hz,
+            max_points=max_points,
+            n_readout=n_readout,
+            readout_duration_s=readout_duration_s,
+            ringup_fraction=ringup_fraction,
+        )
+
     # ----------------------------
     # Readout model
     # ----------------------------
@@ -267,3 +334,44 @@ class QubitSim:
         I_meas = muI + self.readout_sigma * self.rng.standard_normal()
         Q_meas = 0.0 + self.readout_sigma * self.rng.standard_normal()
         return (I_meas, Q_meas)
+    
+    # ----------------------------
+    # Readout waveform 
+    # ----------------------------
+
+    def _sample_readout_waveform(
+        self,
+        p1: float,
+        n_readout: int = 64,
+        readout_duration_s: float = 1.0e-6,
+        ringup_fraction: float = 0.2,
+    ):
+        """
+        Generate a short post-downconversion readout waveform.
+
+        Returns:
+          t_ro: shape (n_readout,)
+          I_ro: shape (n_readout,)
+          Q_ro: shape (n_readout,)
+        """
+        n_readout = int(max(2, n_readout))
+        readout_duration_s = float(readout_duration_s)
+        if readout_duration_s <= 0.0:
+            raise ValueError("readout_duration_s must be > 0")
+
+        p1 = float(np.clip(p1, 0.0, 1.0))
+        outcome_is_1 = self.rng.random() < p1
+
+        muI = self.readout_mu1 if outcome_is_1 else self.readout_mu0
+        muQ = 0.0
+
+        t_ro = np.linspace(0.0, readout_duration_s, n_readout, endpoint=False)
+
+        frac = float(np.clip(ringup_fraction, 1.0e-6, 1.0))
+        tau = max(readout_duration_s * frac, 1.0e-15)
+        env = 1.0 - np.exp(-t_ro / tau)
+
+        I_ro = muI * env + self.readout_sigma * self.rng.standard_normal(n_readout)
+        Q_ro = muQ * env + self.readout_sigma * self.rng.standard_normal(n_readout)
+
+        return (t_ro, I_ro, Q_ro) 
