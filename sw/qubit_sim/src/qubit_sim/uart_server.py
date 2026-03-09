@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 import serial  # pip install pyserial
 
 from qubit_sim.virtual_fpga import VirtualFPGA
-from qubit_sim.qubit_model import QubitSim
+from qubit_sim.qubit_model import QubitSim, iq_to_complex_envelope
 
 
 def _safe_float(x, default=0.0) -> float:
@@ -84,47 +84,74 @@ def _build_tx_terminal_summary(resp: Dict[str, Any]) -> str:
 
 def handle_cmd(obj: Dict[str, Any], fpga: VirtualFPGA, sim: QubitSim) -> Dict[str, Any]:
     """
-    Expected request (one JSON object per line):
-      {"cmd":"PLAY", "amp":1.0, "phase":0.0, "duration_s":200e-9, "envelope":"gauss", "sigma_s":30e-9,
-       "pad_s":200e-9, "n_readout":64, "readout_duration_s":1.0e-6}
+    Commands:
 
-    Response:
-      {"ok":true, "n":64, "t_ro_s":[...], "I":[...], "Q":[...]}
+      PING
+        {"cmd":"PING"}
+
+      RESET
+        {"cmd":"RESET"}
+
+      PLAY
+        {"cmd":"PLAY","amp":1.0,"phase":0.0,"duration_s":200e-9,
+         "envelope":"gauss","sigma_s":30e-9,"pad_s":200e-9,"detuning_hz":0.0}
+
+      MEASURE
+        {"cmd":"MEASURE","n_readout":64,"readout_duration_s":1.0e-6,"ringup_fraction":0.2}
     """
     cmd = str(obj.get("cmd", "")).upper()
 
     if cmd == "PING":
         return {"ok": True, "msg": "PONG"}
 
-    if cmd != "PLAY":
-        return {"ok": False, "err": f"Unknown cmd {cmd!r}"}
+    if cmd == "RESET":
+        sim.reset()
+        return {"ok": True, "msg": "RESET_DONE"}
 
-    pulse = {
-        "amp": _safe_float(obj.get("amp", 0.0)),
-        "phase": _safe_float(obj.get("phase", 0.0)),
-        "duration": _safe_float(obj.get("duration_s", 0.0)),
-        "envelope": str(obj.get("envelope", "square")),
-    }
-    if "sigma_s" in obj and obj["sigma_s"] is not None:
-        pulse["sigma"] = _safe_float(obj["sigma_s"])
+    if cmd == "PLAY":
+        pulse = {
+            "amp": _safe_float(obj.get("amp", 0.0)),
+            "phase": _safe_float(obj.get("phase", 0.0)),
+            "duration": _safe_float(obj.get("duration_s", 0.0)),
+            "envelope": str(obj.get("envelope", "square")),
+        }
+        if "sigma_s" in obj and obj["sigma_s"] is not None:
+            pulse["sigma"] = _safe_float(obj["sigma_s"])
 
-    pad_s = _safe_float(obj.get("pad_s", 0.0))
-    detuning_hz = _safe_float(obj.get("detuning_hz", 0.0))
-    n_readout = int(obj.get("n_readout", 64))
-    readout_duration_s = _safe_float(obj.get("readout_duration_s", 1.0e-6))
-    ringup_fraction = _safe_float(obj.get("ringup_fraction", 0.2))
+        pad_s = _safe_float(obj.get("pad_s", 0.0))
+        detuning_hz = _safe_float(obj.get("detuning_hz", 0.0))
 
-    t, env, Iw, Qw = fpga.render_iq(pulse, pad_s=pad_s)
-    t_ro, I_ro, Q_ro = sim.measure_waveform_from_iq(
-        t,
-        Iw,
-        Qw,
-        if_hz=fpga.if_hz,
-        detuning_hz=detuning_hz,
-        n_readout=n_readout,
-        readout_duration_s=readout_duration_s,
-        ringup_fraction=ringup_fraction,
-    )
+        t, env, Iw, Qw = fpga.render_iq(pulse, pad_s=pad_s)
+
+        u = iq_to_complex_envelope(t, Iw, Qw, if_hz=float(fpga.if_hz))
+        p1 = sim.pulse_p1_from_envelope(
+            t,
+            u,
+            detuning_hz=detuning_hz,
+        )
+
+        return {"ok": True, "msg": "PLAY_DONE", "p1_est": float(p1)}
+
+    if cmd == "MEASURE":
+        n_readout = int(obj.get("n_readout", 64))
+        readout_duration_s = _safe_float(obj.get("readout_duration_s", 1.0e-6))
+        ringup_fraction = _safe_float(obj.get("ringup_fraction", 0.2))
+
+        t_ro, I_ro, Q_ro = sim.readout_waveform(
+            n_readout=n_readout,
+            readout_duration_s=readout_duration_s,
+            ringup_fraction=ringup_fraction,
+        )
+
+        return {
+            "ok": True,
+            "n": int(len(t_ro)),
+            "t_ro_s": [float(x) for x in t_ro],
+            "I": [float(x) for x in I_ro],
+            "Q": [float(x) for x in Q_ro],
+        }
+
+    return {"ok": False, "err": f"Unknown cmd {cmd!r}"}
 
     return {
         "ok": True,

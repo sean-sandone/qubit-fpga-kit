@@ -244,6 +244,38 @@ class QubitSim:
         self.rho = res.final_state
         return float(res.expect[0][-1])
 
+    def current_p1(self) -> float:
+        """
+        Return current excited-state population P(|1>) from the stored state.
+        """
+        return float(expect(self.P1, self.rho))
+
+    def readout_iq(self):
+        """
+        Measure the current state and return one noisy integrated readout point.
+        Does not change self.rho.
+        """
+        p1 = self.current_p1()
+        return self._sample_readout_iq(p1)
+
+    def readout_waveform(
+        self,
+        n_readout: int = 64,
+        readout_duration_s: float = 1.0e-6,
+        ringup_fraction: float = 0.2,
+    ):
+        """
+        Measure the current state and return a short readout waveform.
+        Does not change self.rho.
+        """
+        p1 = self.current_p1()
+        return self._sample_readout_waveform(
+            p1,
+            n_readout=n_readout,
+            readout_duration_s=readout_duration_s,
+            ringup_fraction=ringup_fraction,
+        )
+
     def measure_from_envelope(
         self,
         t: np.ndarray,
