@@ -1,0 +1,11 @@
+{
+  "files.associations": {
+    "*.sv": "systemverilog",
+    "*.svh": "systemverilog",
+    "*.v": "verilog",
+    "*.vh": "verilog",
+    "*.vhd": "vhdl",
+    "*.vhdl": "vhdl"
+  },
+  "python.defaultInterpreterPath": "C:\\Users\\Mining\\miniconda3\\envs\\qutip\\python.exe"
+}
