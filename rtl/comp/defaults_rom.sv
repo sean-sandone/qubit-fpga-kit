@@ -30,9 +30,9 @@ module defaults_rom (
                 play_cfg_v.sigma_cycles    = 32'd6;
                 play_cfg_v.pad_cycles      = 32'd25;
                 play_cfg_v.detune_hz       = 32'd0;
-                play_cfg_v.envelope        = EnvGauss;
+                play_cfg_v.envelope        = ENV_GAUSS;
 
-                rom_word_r.op      = InitOpPlayCfg;
+                rom_word_r.op      = INIT_OP_PLAY_CFG;
                 rom_word_r.addr    = 8'd0;
                 rom_word_r.payload = InitPayloadWidth'(play_cfg_v);
             end
@@ -48,9 +48,9 @@ module defaults_rom (
                 play_cfg_v.sigma_cycles    = 32'd6;
                 play_cfg_v.pad_cycles      = 32'd25;
                 play_cfg_v.detune_hz       = 32'd0;
-                play_cfg_v.envelope        = EnvGauss;
+                play_cfg_v.envelope        = ENV_GAUSS;
 
-                rom_word_r.op      = InitOpPlayCfg;
+                rom_word_r.op      = INIT_OP_PLAY_CFG;
                 rom_word_r.addr    = 8'd1;
                 rom_word_r.payload = InitPayloadWidth'(play_cfg_v);
             end
@@ -64,7 +64,7 @@ module defaults_rom (
                 meas_cfg_v.readout_cycles    = 32'd128;
                 meas_cfg_v.ringup_frac_q1_15 = 16'h4000; // 0.5
 
-                rom_word_r.op      = InitOpMeasCfg;
+                rom_word_r.op      = INIT_OP_MEAS_CFG;
                 rom_word_r.addr    = 8'd0;
                 rom_word_r.payload = InitPayloadWidth'(meas_cfg_v);
             end
@@ -74,12 +74,12 @@ module defaults_rom (
             // ============================================================
 
             3: begin
-                instr_v.opcode    = OpPlay;
+                instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
                 instr_v.operand   = 20'd0;
 
-                rom_word_r.op      = InitOpInstr;
+                rom_word_r.op      = INIT_OP_INSTR;
                 rom_word_r.addr    = 8'd0;
                 rom_word_r.payload = InitPayloadWidth'(instr_v);
             end
@@ -89,12 +89,12 @@ module defaults_rom (
             // ============================================================
 
             4: begin
-                instr_v.opcode    = OpWait;
+                instr_v.opcode    = OP_WAIT;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
                 instr_v.operand   = 20'd100;
 
-                rom_word_r.op      = InitOpInstr;
+                rom_word_r.op      = INIT_OP_INSTR;
                 rom_word_r.addr    = 8'd1;
                 rom_word_r.payload = InitPayloadWidth'(instr_v);
             end
@@ -104,12 +104,12 @@ module defaults_rom (
             // ============================================================
 
             5: begin
-                instr_v.opcode    = OpPlay;
+                instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd1;
                 instr_v.operand   = 20'd0;
 
-                rom_word_r.op      = InitOpInstr;
+                rom_word_r.op      = INIT_OP_INSTR;
                 rom_word_r.addr    = 8'd2;
                 rom_word_r.payload = InitPayloadWidth'(instr_v);
             end
@@ -119,12 +119,12 @@ module defaults_rom (
             // ============================================================
 
             6: begin
-                instr_v.opcode    = OpMeasure;
+                instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
                 instr_v.operand   = 20'd0;
 
-                rom_word_r.op      = InitOpInstr;
+                rom_word_r.op      = INIT_OP_INSTR;
                 rom_word_r.addr    = 8'd3;
                 rom_word_r.payload = InitPayloadWidth'(instr_v);
             end
@@ -134,12 +134,12 @@ module defaults_rom (
             // ============================================================
 
             7: begin
-                instr_v.opcode    = OpEnd;
+                instr_v.opcode    = OP_END;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
                 instr_v.operand   = 20'd0;
 
-                rom_word_r.op      = InitOpInstr;
+                rom_word_r.op      = INIT_OP_INSTR;
                 rom_word_r.addr    = 8'd4;
                 rom_word_r.payload = InitPayloadWidth'(instr_v);
             end
@@ -149,13 +149,13 @@ module defaults_rom (
             // ============================================================
 
             8: begin
-                rom_word_r.op      = InitOpEnd;
+                rom_word_r.op      = INIT_OP_END;
                 rom_word_r.addr    = 8'd0;
                 rom_word_r.payload = '0;
             end
 
             default: begin
-                rom_word_r.op      = InitOpEnd;
+                rom_word_r.op      = INIT_OP_END;
                 rom_word_r.addr    = 8'd0;
                 rom_word_r.payload = '0;
             end

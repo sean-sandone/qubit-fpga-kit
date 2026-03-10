@@ -48,10 +48,6 @@ module init_loader (
     init_state_t state_r;
     logic [InitRomAw-1:0] rom_addr_r;
 
-    // ============================================================
-    // State / address sequencing
-    // ============================================================
-
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
             if (LoadDefaultsAfterReset) begin
@@ -69,7 +65,7 @@ module init_loader (
                 end
 
                 InitStateRun: begin
-                    if (rom_word.op == InitOpEnd) begin
+                    if (rom_word.op == INIT_OP_END) begin
                         state_r <= InitStateDone;
                     end else begin
                         rom_addr_r <= rom_addr_r + 1'b1;
@@ -86,10 +82,6 @@ module init_loader (
             endcase
         end
     end
-
-    // ============================================================
-    // Decode ROM word into register-bank write strobes
-    // ============================================================
 
     always_comb begin
         rom_addr = rom_addr_r;
@@ -124,34 +116,34 @@ module init_loader (
                 init_done   = 1'b0;
 
                 unique case (rom_word.op)
-                    InitOpNop: begin
+                    INIT_OP_NOP: begin
                     end
 
-                    InitOpPlayCfg: begin
+                    INIT_OP_PLAY_CFG: begin
                         wr_play_cfg      = 1'b1;
                         wr_play_cfg_addr = rom_word.addr[PlayCfgAw-1:0];
                         wr_play_cfg_data = play_cfg_t'(rom_word.payload);
                     end
 
-                    InitOpMeasCfg: begin
+                    INIT_OP_MEAS_CFG: begin
                         wr_measure_cfg      = 1'b1;
                         wr_measure_cfg_addr = rom_word.addr[MeasCfgAw-1:0];
                         wr_measure_cfg_data = measure_cfg_t'(rom_word.payload);
                     end
 
-                    InitOpInstr: begin
+                    INIT_OP_INSTR: begin
                         wr_instr      = 1'b1;
                         wr_instr_addr = rom_word.addr[InstrAw-1:0];
                         wr_instr_data = instr_t'(rom_word.payload);
                     end
 
-                    InitOpControl: begin
+                    INIT_OP_CONTROL: begin
                         wr_control            = 1'b1;
                         control_start_exp_in  = rom_word.payload[0];
                         control_soft_reset_in = rom_word.payload[1];
                     end
 
-                    InitOpEnd: begin
+                    INIT_OP_END: begin
                     end
 
                     default: begin

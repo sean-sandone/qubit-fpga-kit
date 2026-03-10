@@ -69,9 +69,12 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic       frame_error;
     logic       parity_error;
 
+    logic [7:0] uart_tx_data;
+    logic       uart_tx_valid;
+    logic       uart_tx_ready;
+
     // ============================================================
     // UART frontend
-    // current demo UART block retained
     // ============================================================
 
     uart_frontend #(
@@ -87,6 +90,10 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .uart_txd_mon    (uart_txd_mon),
         .uart_rxd_mon    (uart_rxd_mon),
+
+        .tx_data         (uart_tx_data),
+        .tx_valid        (uart_tx_valid),
+        .tx_ready        (uart_tx_ready),
 
         .dout_vld        (uart_dout_vld),
         .frame_error     (frame_error),
@@ -203,37 +210,13 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic seq_busy;
     logic seq_done_sticky;
 
-    // ============================================================
-    // Temporary sequencer placeholder signals
-    // these will later come from sequencer.sv
-    // ============================================================
-
-    logic seq_busy_in;
     logic seq_done_pulse_in;
     logic clear_start_exp;
 
-    assign seq_busy_in       = 1'b0;
-    assign seq_done_pulse_in = 1'b0;
-    assign clear_start_exp   = 1'b0;
-
-    // ============================================================
-    // Temporary read-address placeholders
-    // these will later come from sequencer.sv
-    // ============================================================
-
-    assign rd_instr_addr       = '0;
-    assign rd_play_cfg_addr    = '0;
-    assign rd_measure_cfg_addr = '0;
+    assign clear_start_exp = 1'b0;
 
     // ============================================================
     // Register bank
-    // TEMPORARY CONNECTION:
-    // for now, init_loader is tied directly into register_bank
-    // because there is not yet a host/UART register write path
-    //
-    // later, replace this direct hookup with a mux between:
-    //   1) init_loader write interface
-    //   2) host / UART decoder write interface
     // ============================================================
 
     register_bank u_register_bank (
@@ -265,7 +248,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .rd_measure_cfg_addr   (rd_measure_cfg_addr),
         .rd_measure_cfg_data   (rd_measure_cfg_data),
 
-        .seq_busy_in           (seq_busy_in),
+        .seq_busy_in           (seq_busy),
         .seq_done_pulse_in     (seq_done_pulse_in),
         .clear_start_exp       (clear_start_exp),
 
@@ -278,6 +261,63 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .seq_busy              (seq_busy),
         .seq_done_sticky       (seq_done_sticky)
+    );
+
+    // ============================================================
+    // Sequencer -> formatter path
+    // ============================================================
+
+    logic                formatter_start;
+    logic                formatter_is_play;
+    logic [3:0]          formatter_cfg_index;
+    play_cfg_t           formatter_play_cfg;
+    measure_cfg_t        formatter_measure_cfg;
+    logic                formatter_busy;
+    logic                formatter_done_pulse;
+
+    instr_sequencer u_instr_sequencer (
+        .clk                  (clk),
+        .rst_sync_n           (rst_sync_n),
+
+        .init_done            (init_done),
+
+        .rd_instr_addr        (rd_instr_addr),
+        .rd_instr_data        (rd_instr_data),
+
+        .rd_play_cfg_addr     (rd_play_cfg_addr),
+        .rd_play_cfg_data     (rd_play_cfg_data),
+
+        .rd_measure_cfg_addr  (rd_measure_cfg_addr),
+        .rd_measure_cfg_data  (rd_measure_cfg_data),
+
+        .formatter_start      (formatter_start),
+        .formatter_is_play    (formatter_is_play),
+        .formatter_cfg_index  (formatter_cfg_index),
+        .formatter_play_cfg   (formatter_play_cfg),
+        .formatter_measure_cfg(formatter_measure_cfg),
+        .formatter_busy       (formatter_busy),
+        .formatter_done_pulse (formatter_done_pulse),
+
+        .seq_busy             (seq_busy),
+        .seq_done_pulse       (seq_done_pulse_in)
+    );
+
+    cmd_formatter u_cmd_formatter (
+        .clk         (clk),
+        .rst_sync_n  (rst_sync_n),
+
+        .start       (formatter_start),
+        .is_play     (formatter_is_play),
+        .cfg_index   (formatter_cfg_index),
+        .play_cfg    (formatter_play_cfg),
+        .measure_cfg (formatter_measure_cfg),
+
+        .tx_data     (uart_tx_data),
+        .tx_valid    (uart_tx_valid),
+        .tx_ready    (uart_tx_ready),
+
+        .busy        (formatter_busy),
+        .done_pulse  (formatter_done_pulse)
     );
 
 endmodule
