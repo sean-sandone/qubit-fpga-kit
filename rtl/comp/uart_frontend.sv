@@ -6,8 +6,8 @@ module uart_frontend #(
     input  logic rst_sync,     // active high
     input  logic rst_sync_n,   // active low
 
-    input  logic usb_uart_tx_in,
-    output logic usb_uart_rx_out,
+    input  logic usb_uart_tx_in,   // labeled from the perspective of the USB UART transceiver chip
+    output logic usb_uart_rx_out,  // labeled from the perspective of the USB UART transceiver chip
 
     output logic uart_txd_mon,
     output logic uart_rxd_mon,
@@ -20,30 +20,39 @@ module uart_frontend #(
 
     import rtl_pkg::*;
 
+    // ============================================================
     // Physical UART wires at FPGA boundary
+    // ============================================================
+
     logic uart_txd;
     logic uart_rxd;
 
+    // ============================================================
     // UART core handshake
+    // ============================================================
+
     logic [7:0] din;
     logic       din_vld;
     logic       din_rdy;
 
+    // ============================================================
     // Sender state
+    // ============================================================
+
     uart_tx_state_t st;
     int unsigned idx;
 
     // Swap UART signals to match board labeling
-    assign uart_rxd       = usb_uart_tx_in;
+    assign uart_rxd        = usb_uart_tx_in;
     assign usb_uart_rx_out = uart_txd;
 
-    // Monitor outputs for LEDs / debug
     assign uart_txd_mon = uart_txd;
     assign uart_rxd_mon = uart_rxd;
 
-    // ----------------------------
+    // ============================================================
     // VHDL UART instance
-    // ----------------------------
+    // ============================================================
+
     UART #(
         .CLK_FREQ      (CLK_FREQ_HZ),
         .BAUD_RATE     (BAUD_RATE),
@@ -63,11 +72,12 @@ module uart_frontend #(
         .PARITY_ERROR (parity_error)
     );
 
-    // ----------------------------
+    // ============================================================
     // Message ROM
     // Current demo behavior:
-    // sends one JSON PLAY command followed by newline.
-    // ----------------------------
+    // sends one JSON PLAY command followed by newline
+    // ============================================================
+
     function automatic logic [7:0] msg_byte(input int msg_idx);
         case (msg_idx)
             0:   msg_byte = 8'h7B; // {
@@ -176,9 +186,10 @@ module uart_frontend #(
         endcase
     endfunction
 
-    // ----------------------------
+    // ============================================================
     // Current one-shot sender FSM
-    // ----------------------------
+    // ============================================================
+
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
             st      <= UART_TX_IDLE;
@@ -204,7 +215,7 @@ module uart_frontend #(
                 end
 
                 UART_TX_ADVANCE: begin
-                    if (idx == MsgLen - 1) begin
+                    if (idx == PlayMsgLen - 1) begin
                         din_vld <= 1'b0;
                         st      <= UART_TX_DONE;
                     end else begin
