@@ -2,9 +2,9 @@ module cmd_formatter (
     input  logic clk,
     input  logic rst_sync_n,
 
-    input  logic              start,
-    input  logic              is_play,
-    input  logic [3:0]        cfg_index,
+    input  logic               start,
+    input  logic               is_play,
+    input  logic [3:0]         cfg_index,
     input  rtl_pkg::play_cfg_t play_cfg,
     input  rtl_pkg::measure_cfg_t measure_cfg,
 
@@ -12,8 +12,8 @@ module cmd_formatter (
     output logic       tx_valid,
     input  logic       tx_ready,
 
-    output logic       busy,
-    output logic       done_pulse
+    output logic busy,
+    output logic done_pulse
 );
 
     import rtl_pkg::*;
@@ -26,12 +26,12 @@ module cmd_formatter (
 
     fmt_state_t state_r;
 
-    logic               is_play_r;
-    logic [3:0]         cfg_index_r;
-    play_cfg_t          play_cfg_r;
-    measure_cfg_t       measure_cfg_r;
-    logic [5:0]         seg_r;
-    logic [5:0]         char_idx_r;
+    logic         is_play_r;
+    logic [3:0]   cfg_index_r;
+    play_cfg_t    play_cfg_r;
+    measure_cfg_t measure_cfg_r;
+    logic [5:0]   seg_r;
+    logic [5:0]   char_idx_r;
 
     function automatic logic [7:0] hex_char(input logic [3:0] nibble);
         case (nibble)
@@ -54,25 +54,32 @@ module cmd_formatter (
         endcase
     endfunction
 
-    function automatic logic [7:0] hex16_char(input logic [15:0] value, input logic [2:0] digit_idx);
-        case (digit_idx)
-            3'd0: hex16_char = hex_char(value[15:12]);
-            3'd1: hex16_char = hex_char(value[11:8]);
-            3'd2: hex16_char = hex_char(value[7:4]);
-            default: hex16_char = hex_char(value[3:0]);
+    function automatic logic [7:0] hex1_char(input logic [3:0] value, input logic [2:0] idx);
+        case (idx)
+            3'd0: hex1_char = hex_char(value);
+            default: hex1_char = "0";
         endcase
     endfunction
 
-    function automatic logic [7:0] hex32_char(input logic [31:0] value, input logic [3:0] digit_idx);
-        case (digit_idx)
-            4'd0: hex32_char = hex_char(value[31:28]);
-            4'd1: hex32_char = hex_char(value[27:24]);
-            4'd2: hex32_char = hex_char(value[23:20]);
-            4'd3: hex32_char = hex_char(value[19:16]);
-            4'd4: hex32_char = hex_char(value[15:12]);
-            4'd5: hex32_char = hex_char(value[11:8]);
-            4'd6: hex32_char = hex_char(value[7:4]);
-            default: hex32_char = hex_char(value[3:0]);
+    function automatic logic [7:0] hex4_char(input logic [15:0] value, input logic [2:0] idx);
+        case (idx)
+            3'd0: hex4_char = hex_char(value[15:12]);
+            3'd1: hex4_char = hex_char(value[11:8]);
+            3'd2: hex4_char = hex_char(value[7:4]);
+            default: hex4_char = hex_char(value[3:0]);
+        endcase
+    endfunction
+
+    function automatic logic [7:0] hex8_char(input logic [31:0] value, input logic [3:0] idx);
+        case (idx)
+            4'd0: hex8_char = hex_char(value[31:28]);
+            4'd1: hex8_char = hex_char(value[27:24]);
+            4'd2: hex8_char = hex_char(value[23:20]);
+            4'd3: hex8_char = hex_char(value[19:16]);
+            4'd4: hex8_char = hex_char(value[15:12]);
+            4'd5: hex8_char = hex_char(value[11:8]);
+            4'd6: hex8_char = hex_char(value[7:4]);
+            default: hex8_char = hex_char(value[3:0]);
         endcase
     endfunction
 
@@ -107,21 +114,21 @@ module cmd_formatter (
 
     function automatic logic [5:0] play_seg_len(input logic [5:0] seg, input play_cfg_t cfg);
         case (seg)
-            6'd0:  play_seg_len = 24; // {"cmd":"PLAY","cfg":"0x
+            6'd0:  play_seg_len = 23; // {"cmd":"PLAY","cfg":"0x
             6'd1:  play_seg_len = 1;  // cfg nibble
-            6'd2:  play_seg_len = 11; // ","amp":"0x
-            6'd3:  play_seg_len = 4;  // amp
-            6'd4:  play_seg_len = 13; // ","phase":"0x
-            6'd5:  play_seg_len = 4;  // phase
-            6'd6:  play_seg_len = 16; // ","duration":"0x
-            6'd7:  play_seg_len = 8;  // duration
-            6'd8:  play_seg_len = 13; // ","sigma":"0x
-            6'd9:  play_seg_len = 8;  // sigma
-            6'd10: play_seg_len = 11; // ","pad":"0x
-            6'd11: play_seg_len = 8;  // pad
-            6'd12: play_seg_len = 14; // ","detune":"0x
-            6'd13: play_seg_len = 8;  // detune
-            6'd14: play_seg_len = 15; // ","envelope":"
+            6'd2:  play_seg_len = 16; // ","amp_q8_8":"
+            6'd3:  play_seg_len = 4;  // amp_q8_8
+            6'd4:  play_seg_len = 18; // ","phase_q8_8":"
+            6'd5:  play_seg_len = 4;  // phase_q8_8
+            6'd6:  play_seg_len = 17; // ","duration_ns":"
+            6'd7:  play_seg_len = 8;  // duration_ns
+            6'd8:  play_seg_len = 14; // ","sigma_ns":"
+            6'd9:  play_seg_len = 8;  // sigma_ns
+            6'd10: play_seg_len = 12; // ","pad_ns":"
+            6'd11: play_seg_len = 8;  // pad_ns
+            6'd12: play_seg_len = 15; // ","detune_hz":"
+            6'd13: play_seg_len = 8;  // detune_hz
+            6'd14: play_seg_len = 14; // ","envelope":"
             6'd15: play_seg_len = env_len(cfg.envelope);
             default: play_seg_len = 3; // "}\n
         endcase
@@ -158,13 +165,12 @@ module cmd_formatter (
                     19: play_seg_byte = ":";
                     20: play_seg_byte = "\"";
                     21: play_seg_byte = "0";
-                    22: play_seg_byte = "x";
-                    default: play_seg_byte = " ";
+                    default: play_seg_byte = "x";
                 endcase
             end
 
             6'd1: begin
-                play_seg_byte = hex_char(cfg_index_v);
+                play_seg_byte = hex1_char(cfg_index_v, idx[2:0]);
             end
 
             6'd2: begin
@@ -175,16 +181,20 @@ module cmd_formatter (
                     3:  play_seg_byte = "a";
                     4:  play_seg_byte = "m";
                     5:  play_seg_byte = "p";
-                    6:  play_seg_byte = "\"";
-                    7:  play_seg_byte = ":";
-                    8:  play_seg_byte = "\"";
-                    9:  play_seg_byte = "0";
-                    default: play_seg_byte = "x";
+                    6:  play_seg_byte = "_";
+                    7:  play_seg_byte = "q";
+                    8:  play_seg_byte = "8";
+                    9:  play_seg_byte = "_";
+                    10: play_seg_byte = "8";
+                    11: play_seg_byte = "\"";
+                    12: play_seg_byte = ":";
+                    13: play_seg_byte = "\"";
+                    default: play_seg_byte = " ";
                 endcase
             end
 
             6'd3: begin
-                play_seg_byte = hex16_char(cfg.amp_q8_8, idx[2:0]);
+                play_seg_byte = hex4_char(cfg.amp_q8_8, idx[2:0]);
             end
 
             6'd4: begin
@@ -197,16 +207,20 @@ module cmd_formatter (
                     5:  play_seg_byte = "a";
                     6:  play_seg_byte = "s";
                     7:  play_seg_byte = "e";
-                    8:  play_seg_byte = "\"";
-                    9:  play_seg_byte = ":";
-                    10: play_seg_byte = "\"";
-                    11: play_seg_byte = "0";
-                    default: play_seg_byte = "x";
+                    8:  play_seg_byte = "_";
+                    9:  play_seg_byte = "q";
+                    10: play_seg_byte = "8";
+                    11: play_seg_byte = "_";
+                    12: play_seg_byte = "8";
+                    13: play_seg_byte = "\"";
+                    14: play_seg_byte = ":";
+                    15: play_seg_byte = "\"";
+                    default: play_seg_byte = " ";
                 endcase
             end
 
             6'd5: begin
-                play_seg_byte = hex16_char(cfg.phase_q8_8, idx[2:0]);
+                play_seg_byte = hex4_char(cfg.phase_q8_8, idx[2:0]);
             end
 
             6'd6: begin
@@ -222,16 +236,17 @@ module cmd_formatter (
                     8:  play_seg_byte = "i";
                     9:  play_seg_byte = "o";
                     10: play_seg_byte = "n";
-                    11: play_seg_byte = "\"";
-                    12: play_seg_byte = ":";
-                    13: play_seg_byte = "\"";
-                    14: play_seg_byte = "0";
-                    default: play_seg_byte = "x";
+                    11: play_seg_byte = "_";
+                    12: play_seg_byte = "n";
+                    13: play_seg_byte = "s";
+                    14: play_seg_byte = "\"";
+                    15: play_seg_byte = ":";
+                    default: play_seg_byte = "\"";
                 endcase
             end
 
             6'd7: begin
-                play_seg_byte = hex32_char(cfg.duration_cycles, idx[3:0]);
+                play_seg_byte = hex8_char(cfg.duration_ns, idx[3:0]);
             end
 
             6'd8: begin
@@ -244,16 +259,17 @@ module cmd_formatter (
                     5:  play_seg_byte = "g";
                     6:  play_seg_byte = "m";
                     7:  play_seg_byte = "a";
-                    8:  play_seg_byte = "\"";
-                    9:  play_seg_byte = ":";
-                    10: play_seg_byte = "\"";
-                    11: play_seg_byte = "0";
-                    default: play_seg_byte = "x";
+                    8:  play_seg_byte = "_";
+                    9:  play_seg_byte = "n";
+                    10: play_seg_byte = "s";
+                    11: play_seg_byte = "\"";
+                    12: play_seg_byte = ":";
+                    default: play_seg_byte = "\"";
                 endcase
             end
 
             6'd9: begin
-                play_seg_byte = hex32_char(cfg.sigma_cycles, idx[3:0]);
+                play_seg_byte = hex8_char(cfg.sigma_ns, idx[3:0]);
             end
 
             6'd10: begin
@@ -264,16 +280,17 @@ module cmd_formatter (
                     3:  play_seg_byte = "p";
                     4:  play_seg_byte = "a";
                     5:  play_seg_byte = "d";
-                    6:  play_seg_byte = "\"";
-                    7:  play_seg_byte = ":";
-                    8:  play_seg_byte = "\"";
-                    9:  play_seg_byte = "0";
-                    default: play_seg_byte = "x";
+                    6:  play_seg_byte = "_";
+                    7:  play_seg_byte = "n";
+                    8:  play_seg_byte = "s";
+                    9:  play_seg_byte = "\"";
+                    10: play_seg_byte = ":";
+                    default: play_seg_byte = "\"";
                 endcase
             end
 
             6'd11: begin
-                play_seg_byte = hex32_char(cfg.pad_cycles, idx[3:0]);
+                play_seg_byte = hex8_char(cfg.pad_ns, idx[3:0]);
             end
 
             6'd12: begin
@@ -287,16 +304,17 @@ module cmd_formatter (
                     6:  play_seg_byte = "u";
                     7:  play_seg_byte = "n";
                     8:  play_seg_byte = "e";
-                    9:  play_seg_byte = "\"";
-                    10: play_seg_byte = ":";
-                    11: play_seg_byte = "\"";
-                    12: play_seg_byte = "0";
-                    default: play_seg_byte = "x";
+                    9:  play_seg_byte = "_";
+                    10: play_seg_byte = "h";
+                    11: play_seg_byte = "z";
+                    12: play_seg_byte = "\"";
+                    13: play_seg_byte = ":";
+                    default: play_seg_byte = "\"";
                 endcase
             end
 
             6'd13: begin
-                play_seg_byte = hex32_char(cfg.detune_hz, idx[3:0]);
+                play_seg_byte = hex8_char(cfg.detune_hz, idx[3:0]);
             end
 
             6'd14: begin
@@ -335,14 +353,14 @@ module cmd_formatter (
 
     function automatic logic [5:0] meas_seg_len(input logic [5:0] seg);
         case (seg)
-            6'd0:  meas_seg_len = 27; // {"cmd":"MEASURE","cfg":"0x
-            6'd1:  meas_seg_len = 1;
-            6'd2:  meas_seg_len = 17; // ","n_readout":"0x
-            6'd3:  meas_seg_len = 4;
-            6'd4:  meas_seg_len = 22; // ","readout_cycles":"0x
-            6'd5:  meas_seg_len = 8;
-            6'd6:  meas_seg_len = 24; // ","ringup_frac_q1_15":"0x
-            6'd7:  meas_seg_len = 4;
+            6'd0:  meas_seg_len = 26; // {"cmd":"MEASURE","cfg":"0x
+            6'd1:  meas_seg_len = 1;  // cfg nibble
+            6'd2:  meas_seg_len = 16; // ","n_readout":"
+            6'd3:  meas_seg_len = 4;  // n_readout
+            6'd4:  meas_seg_len = 17; // ","readout_ns":"
+            6'd5:  meas_seg_len = 8;  // readout_ns
+            6'd6:  meas_seg_len = 16; // ","ringup_ns":"
+            6'd7:  meas_seg_len = 8;  // ringup_ns
             default: meas_seg_len = 3; // "}\n
         endcase
     endfunction
@@ -381,13 +399,12 @@ module cmd_formatter (
                     22: meas_seg_byte = ":";
                     23: meas_seg_byte = "\"";
                     24: meas_seg_byte = "0";
-                    25: meas_seg_byte = "x";
-                    default: meas_seg_byte = " ";
+                    default: meas_seg_byte = "x";
                 endcase
             end
 
             6'd1: begin
-                meas_seg_byte = hex_char(cfg_index_v);
+                meas_seg_byte = hex1_char(cfg_index_v, idx[2:0]);
             end
 
             6'd2: begin
@@ -407,13 +424,12 @@ module cmd_formatter (
                     12: meas_seg_byte = "\"";
                     13: meas_seg_byte = ":";
                     14: meas_seg_byte = "\"";
-                    15: meas_seg_byte = "0";
-                    default: meas_seg_byte = "x";
+                    default: meas_seg_byte = " ";
                 endcase
             end
 
             6'd3: begin
-                meas_seg_byte = hex16_char(cfg.n_readout, idx[2:0]);
+                meas_seg_byte = hex4_char(cfg.n_readout, idx[2:0]);
             end
 
             6'd4: begin
@@ -429,22 +445,17 @@ module cmd_formatter (
                     8:  meas_seg_byte = "u";
                     9:  meas_seg_byte = "t";
                     10: meas_seg_byte = "_";
-                    11: meas_seg_byte = "c";
-                    12: meas_seg_byte = "y";
-                    13: meas_seg_byte = "c";
-                    14: meas_seg_byte = "l";
-                    15: meas_seg_byte = "e";
-                    16: meas_seg_byte = "s";
-                    17: meas_seg_byte = "\"";
-                    18: meas_seg_byte = ":";
-                    19: meas_seg_byte = "\"";
-                    20: meas_seg_byte = "0";
-                    default: meas_seg_byte = "x";
+                    11: meas_seg_byte = "n";
+                    12: meas_seg_byte = "s";
+                    13: meas_seg_byte = "\"";
+                    14: meas_seg_byte = ":";
+                    15: meas_seg_byte = "\"";
+                    default: meas_seg_byte = " ";
                 endcase
             end
 
             6'd5: begin
-                meas_seg_byte = hex32_char(cfg.readout_cycles, idx[3:0]);
+                meas_seg_byte = hex8_char(cfg.readout_ns, idx[3:0]);
             end
 
             6'd6: begin
@@ -459,25 +470,17 @@ module cmd_formatter (
                     7:  meas_seg_byte = "u";
                     8:  meas_seg_byte = "p";
                     9:  meas_seg_byte = "_";
-                    10: meas_seg_byte = "f";
-                    11: meas_seg_byte = "r";
-                    12: meas_seg_byte = "a";
-                    13: meas_seg_byte = "c";
-                    14: meas_seg_byte = "_";
-                    15: meas_seg_byte = "q";
-                    16: meas_seg_byte = "1";
-                    17: meas_seg_byte = "_";
-                    18: meas_seg_byte = "1";
-                    19: meas_seg_byte = "5";
-                    20: meas_seg_byte = "\"";
-                    21: meas_seg_byte = ":";
-                    22: meas_seg_byte = "\"";
-                    default: meas_seg_byte = "0";
+                    10: meas_seg_byte = "n";
+                    11: meas_seg_byte = "s";
+                    12: meas_seg_byte = "\"";
+                    13: meas_seg_byte = ":";
+                    14: meas_seg_byte = "\"";
+                    default: meas_seg_byte = " ";
                 endcase
             end
 
             6'd7: begin
-                meas_seg_byte = hex16_char(cfg.ringup_frac_q1_15, idx[2:0]);
+                meas_seg_byte = hex8_char(cfg.ringup_ns, idx[3:0]);
             end
 
             default: begin

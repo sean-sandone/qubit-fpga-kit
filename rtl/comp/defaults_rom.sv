@@ -24,13 +24,13 @@ module defaults_rom (
             // ============================================================
 
             0: begin
-                play_cfg_v.amp_q8_8        = 16'h0100; // 1.0
-                play_cfg_v.phase_q8_8      = 16'h0000; // 0.0
-                play_cfg_v.duration_cycles = 32'd25;
-                play_cfg_v.sigma_cycles    = 32'd6;
-                play_cfg_v.pad_cycles      = 32'd25;
-                play_cfg_v.detune_hz       = 32'd0;
-                play_cfg_v.envelope        = ENV_GAUSS;
+                play_cfg_v.amp_q8_8    = 16'h0100; // 1.0
+                play_cfg_v.phase_q8_8  = 16'h0000; // 0.0
+                play_cfg_v.duration_ns = 32'd200;
+                play_cfg_v.sigma_ns    = 32'd30;
+                play_cfg_v.pad_ns      = 32'd200;
+                play_cfg_v.detune_hz   = 32'd0;
+                play_cfg_v.envelope    = ENV_GAUSS;
 
                 rom_word_r.op      = INIT_OP_PLAY_CFG;
                 rom_word_r.addr    = 8'd0;
@@ -42,13 +42,13 @@ module defaults_rom (
             // ============================================================
 
             1: begin
-                play_cfg_v.amp_q8_8        = 16'h0080; // 0.5
-                play_cfg_v.phase_q8_8      = 16'h0100; // placeholder
-                play_cfg_v.duration_cycles = 32'd25;
-                play_cfg_v.sigma_cycles    = 32'd6;
-                play_cfg_v.pad_cycles      = 32'd25;
-                play_cfg_v.detune_hz       = 32'd0;
-                play_cfg_v.envelope        = ENV_GAUSS;
+                play_cfg_v.amp_q8_8    = 16'h0080; // 0.5
+                play_cfg_v.phase_q8_8  = 16'h0100; // placeholder
+                play_cfg_v.duration_ns = 32'd200;
+                play_cfg_v.sigma_ns    = 32'd30;
+                play_cfg_v.pad_ns      = 32'd200;
+                play_cfg_v.detune_hz   = 32'd0;
+                play_cfg_v.envelope    = ENV_GAUSS;
 
                 rom_word_r.op      = INIT_OP_PLAY_CFG;
                 rom_word_r.addr    = 8'd1;
@@ -60,9 +60,9 @@ module defaults_rom (
             // ============================================================
 
             2: begin
-                meas_cfg_v.n_readout         = 16'd64;
-                meas_cfg_v.readout_cycles    = 32'd128;
-                meas_cfg_v.ringup_frac_q1_15 = 16'h4000; // 0.5
+                meas_cfg_v.n_readout = 16'd64;
+                meas_cfg_v.readout_ns = 32'd1024;
+                meas_cfg_v.ringup_ns  = 32'd512;
 
                 rom_word_r.op      = INIT_OP_MEAS_CFG;
                 rom_word_r.addr    = 8'd0;

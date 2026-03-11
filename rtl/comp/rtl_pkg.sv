@@ -65,17 +65,17 @@ package rtl_pkg;
     typedef struct packed {
         logic [15:0] amp_q8_8;
         logic [15:0] phase_q8_8;
-        logic [31:0] duration_cycles;
-        logic [31:0] sigma_cycles;
-        logic [31:0] pad_cycles;
+        logic [31:0] duration_ns;
+        logic [31:0] sigma_ns;
+        logic [31:0] pad_ns;
         logic [31:0] detune_hz;
         envelope_t   envelope;
     } play_cfg_t;
 
     typedef struct packed {
         logic [15:0] n_readout;
-        logic [31:0] readout_cycles;
-        logic [15:0] ringup_frac_q1_15;
+        logic [31:0] readout_ns;
+        logic [31:0] ringup_ns;
     } measure_cfg_t;
 
     // ============================================================
@@ -83,9 +83,9 @@ package rtl_pkg;
     // ============================================================
 
     typedef struct packed {
-        opcode_t     opcode;
-        logic [3:0]  flags;
-        logic [3:0]  cfg_index;
+        opcode_t    opcode;
+        logic [3:0] flags;
+        logic [3:0] cfg_index;
         logic [19:0] operand;
     } instr_t;
 
@@ -96,9 +96,9 @@ package rtl_pkg;
     localparam int unsigned InitPayloadWidth = $bits(play_cfg_t);
 
     typedef struct packed {
-        init_op_t                      op;
-        logic [7:0]                    addr;
-        logic [InitPayloadWidth-1:0]   payload;
+        init_op_t                    op;
+        logic [7:0]                  addr;
+        logic [InitPayloadWidth-1:0] payload;
     } init_rom_word_t;
 
     // ============================================================

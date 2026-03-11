@@ -1,3 +1,7 @@
+# KCU105: Bank 0 VCCO is 1.8V
+set_property CFGBVS GND [current_design]
+set_property CONFIG_VOLTAGE 1.8 [current_design]
+
 ## 125 MHz clock (differential)
 set_property PACKAGE_PIN G10 [get_ports clk_125mhz_p]
 set_property PACKAGE_PIN F10 [get_ports clk_125mhz_n]
