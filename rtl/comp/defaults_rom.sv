@@ -1,0 +1,167 @@
+module defaults_rom (
+    input  logic [rtl_pkg::InitRomAw-1:0] rom_addr,
+    output rtl_pkg::init_rom_word_t       rom_word
+);
+
+    import rtl_pkg::*;
+
+    init_rom_word_t rom_word_r;
+
+    play_cfg_t    play_cfg_v;
+    measure_cfg_t meas_cfg_v;
+    instr_t       instr_v;
+
+    always_comb begin
+        rom_word_r = '0;
+        play_cfg_v = '0;
+        meas_cfg_v = '0;
+        instr_v    = '0;
+
+        unique case (rom_addr)
+
+            // ============================================================
+            // Play config 0
+            // ============================================================
+
+            0: begin
+                play_cfg_v.amp_q8_8    = 16'h0100; // 1.0
+                play_cfg_v.phase_q8_8  = 16'h0000; // 0.0
+                play_cfg_v.duration_ns = 32'd200;
+                play_cfg_v.sigma_ns    = 32'd30;
+                play_cfg_v.pad_ns      = 32'd200;
+                play_cfg_v.detune_hz   = 32'd0;
+                play_cfg_v.envelope    = ENV_GAUSS;
+
+                rom_word_r.op      = INIT_OP_PLAY_CFG;
+                rom_word_r.addr    = 8'd0;
+                rom_word_r.payload = InitPayloadWidth'(play_cfg_v);
+            end
+
+            // ============================================================
+            // Play config 1
+            // ============================================================
+
+            1: begin
+                play_cfg_v.amp_q8_8    = 16'h0080; // 0.5
+                play_cfg_v.phase_q8_8  = 16'h0100; // placeholder
+                play_cfg_v.duration_ns = 32'd200;
+                play_cfg_v.sigma_ns    = 32'd30;
+                play_cfg_v.pad_ns      = 32'd200;
+                play_cfg_v.detune_hz   = 32'd0;
+                play_cfg_v.envelope    = ENV_GAUSS;
+
+                rom_word_r.op      = INIT_OP_PLAY_CFG;
+                rom_word_r.addr    = 8'd1;
+                rom_word_r.payload = InitPayloadWidth'(play_cfg_v);
+            end
+
+            // ============================================================
+            // Measure config 0
+            // ============================================================
+
+            2: begin
+                meas_cfg_v.n_readout = 16'd64;
+                meas_cfg_v.readout_ns = 32'd1024;
+                meas_cfg_v.ringup_ns  = 32'd512;
+
+                rom_word_r.op      = INIT_OP_MEAS_CFG;
+                rom_word_r.addr    = 8'd0;
+                rom_word_r.payload = InitPayloadWidth'(meas_cfg_v);
+            end
+
+            // ============================================================
+            // Instr 0: PLAY cfg 0
+            // ============================================================
+
+            3: begin
+                instr_v.opcode    = OP_PLAY;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd0;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 1: WAIT 100
+            // ============================================================
+
+            4: begin
+                instr_v.opcode    = OP_WAIT;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd100;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd1;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 2: PLAY cfg 1
+            // ============================================================
+
+            5: begin
+                instr_v.opcode    = OP_PLAY;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd1;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd2;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 3: MEASURE cfg 0
+            // ============================================================
+
+            6: begin
+                instr_v.opcode    = OP_MEASURE;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd3;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 4: END
+            // ============================================================
+
+            7: begin
+                instr_v.opcode    = OP_END;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd4;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // End of init stream
+            // ============================================================
+
+            8: begin
+                rom_word_r.op      = INIT_OP_END;
+                rom_word_r.addr    = 8'd0;
+                rom_word_r.payload = '0;
+            end
+
+            default: begin
+                rom_word_r.op      = INIT_OP_END;
+                rom_word_r.addr    = 8'd0;
+                rom_word_r.payload = '0;
+            end
+        endcase
+    end
+
+    assign rom_word = rom_word_r;
+
+endmodule
