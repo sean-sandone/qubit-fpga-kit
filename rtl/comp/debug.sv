@@ -14,7 +14,7 @@ module debug (
     output logic done_pulse
 );
 
-    localparam int MsgBufLen = 64;
+    localparam int MsgBufLen = 80;
 
     typedef enum logic [3:0] {
         DbgStateIdle         = 4'd0,
@@ -45,9 +45,8 @@ module debug (
 
     logic [5:0] text_idx_r;
 
-    logic signed [15:0] cur_value_r;
-    logic [15:0]        cur_mag_r;
-    logic               cur_neg_r;
+    logic [15:0] cur_mag_r;
+    logic        cur_neg_r;
 
     logic [15:0] div10_quot_w;
     logic [3:0]  div10_rem_w;
@@ -59,7 +58,9 @@ module debug (
 
     function automatic [15:0] abs16_u(input logic signed [15:0] value);
         begin
-            if (value < 0) begin
+            if (value == 16'sh8000) begin
+                abs16_u = 16'd32768;
+            end else if (value < 0) begin
                 abs16_u = $unsigned(-value);
             end else begin
                 abs16_u = $unsigned(value);
@@ -151,20 +152,19 @@ module debug (
 
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
-            state_r        <= DbgStateIdle;
-            i_avg_r        <= '0;
-            q_avg_r        <= '0;
-            msg_len_r      <= '0;
-            msg_wr_idx_r   <= '0;
-            msg_tx_idx_r   <= '0;
-            text_idx_r     <= '0;
-            cur_value_r    <= '0;
-            cur_mag_r      <= '0;
-            cur_neg_r      <= 1'b0;
-            digit_count_r  <= '0;
+            state_r          <= DbgStateIdle;
+            i_avg_r          <= '0;
+            q_avg_r          <= '0;
+            msg_len_r        <= '0;
+            msg_wr_idx_r     <= '0;
+            msg_tx_idx_r     <= '0;
+            text_idx_r       <= '0;
+            cur_mag_r        <= '0;
+            cur_neg_r        <= 1'b0;
+            digit_count_r    <= '0;
             digit_emit_idx_r <= '0;
-            num_state_r    <= NumStateIdle;
-            done_pulse     <= 1'b0;
+            num_state_r      <= NumStateIdle;
+            done_pulse       <= 1'b0;
         end else begin
             done_pulse <= 1'b0;
 
@@ -177,6 +177,8 @@ module debug (
                         msg_wr_idx_r     <= '0;
                         msg_tx_idx_r     <= '0;
                         text_idx_r       <= '0;
+                        cur_mag_r        <= '0;
+                        cur_neg_r        <= 1'b0;
                         digit_count_r    <= '0;
                         digit_emit_idx_r <= '0;
                         num_state_r      <= NumStateIdle;
@@ -190,13 +192,12 @@ module debug (
                     msg_len_r               <= msg_len_r + 1'b1;
 
                     if (text_idx_r == 6'd48) begin
-                        cur_value_r        <= i_avg_r;
-                        cur_mag_r          <= abs16_u(i_avg_r);
-                        cur_neg_r          <= i_avg_r < 0;
-                        digit_count_r      <= '0;
-                        digit_emit_idx_r   <= '0;
-                        num_state_r        <= NumStateLoadDigits;
-                        state_r            <= DbgStateBuildI;
+                        cur_mag_r        <= abs16_u(i_avg_r);
+                        cur_neg_r        <= (i_avg_r < 0);
+                        digit_count_r    <= '0;
+                        digit_emit_idx_r <= '0;
+                        num_state_r      <= NumStateLoadDigits;
+                        state_r          <= DbgStateBuildI;
                     end else begin
                         text_idx_r <= text_idx_r + 1'b1;
                     end
@@ -205,21 +206,21 @@ module debug (
                 DbgStateBuildI: begin
                     case (num_state_r)
                         NumStateLoadDigits: begin
-                            if ((digit_count_r == 0) && cur_neg_r) begin
+                            if (cur_neg_r) begin
                                 msg_buf_r[msg_wr_idx_r] <= "-";
                                 msg_wr_idx_r            <= msg_wr_idx_r + 1'b1;
                                 msg_len_r               <= msg_len_r + 1'b1;
                                 cur_neg_r               <= 1'b0;
-                            end
-
-                            digit_buf_r[digit_count_r] <= div10_rem_w;
-                            digit_count_r              <= digit_count_r + 1'b1;
-
-                            if (div10_quot_w == 0) begin
-                                digit_emit_idx_r <= digit_count_r;
-                                num_state_r      <= NumStateEmitDigits;
                             end else begin
-                                cur_mag_r <= div10_quot_w;
+                                digit_buf_r[digit_count_r] <= div10_rem_w;
+                                digit_count_r              <= digit_count_r + 1'b1;
+
+                                if (div10_quot_w == 0) begin
+                                    digit_emit_idx_r <= digit_count_r;
+                                    num_state_r      <= NumStateEmitDigits;
+                                end else begin
+                                    cur_mag_r <= div10_quot_w;
+                                end
                             end
                         end
 
@@ -248,13 +249,12 @@ module debug (
                     msg_len_r               <= msg_len_r + 1'b1;
 
                     if (text_idx_r == 6'd8) begin
-                        cur_value_r        <= q_avg_r;
-                        cur_mag_r          <= abs16_u(q_avg_r);
-                        cur_neg_r          <= q_avg_r < 0;
-                        digit_count_r      <= '0;
-                        digit_emit_idx_r   <= '0;
-                        num_state_r        <= NumStateLoadDigits;
-                        state_r            <= DbgStateBuildQ;
+                        cur_mag_r        <= abs16_u(q_avg_r);
+                        cur_neg_r        <= (q_avg_r < 0);
+                        digit_count_r    <= '0;
+                        digit_emit_idx_r <= '0;
+                        num_state_r      <= NumStateLoadDigits;
+                        state_r          <= DbgStateBuildQ;
                     end else begin
                         text_idx_r <= text_idx_r + 1'b1;
                     end
@@ -263,21 +263,21 @@ module debug (
                 DbgStateBuildQ: begin
                     case (num_state_r)
                         NumStateLoadDigits: begin
-                            if ((digit_count_r == 0) && cur_neg_r) begin
+                            if (cur_neg_r) begin
                                 msg_buf_r[msg_wr_idx_r] <= "-";
                                 msg_wr_idx_r            <= msg_wr_idx_r + 1'b1;
                                 msg_len_r               <= msg_len_r + 1'b1;
                                 cur_neg_r               <= 1'b0;
-                            end
-
-                            digit_buf_r[digit_count_r] <= div10_rem_w;
-                            digit_count_r              <= digit_count_r + 1'b1;
-
-                            if (div10_quot_w == 0) begin
-                                digit_emit_idx_r <= digit_count_r;
-                                num_state_r      <= NumStateEmitDigits;
                             end else begin
-                                cur_mag_r <= div10_quot_w;
+                                digit_buf_r[digit_count_r] <= div10_rem_w;
+                                digit_count_r              <= digit_count_r + 1'b1;
+
+                                if (div10_quot_w == 0) begin
+                                    digit_emit_idx_r <= digit_count_r;
+                                    num_state_r      <= NumStateEmitDigits;
+                                end else begin
+                                    cur_mag_r <= div10_quot_w;
+                                end
                             end
                         end
 
