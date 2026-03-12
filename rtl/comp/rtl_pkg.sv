@@ -83,10 +83,10 @@ package rtl_pkg;
     // ============================================================
 
     typedef struct packed {
-        opcode_t    opcode;
-        logic [3:0] flags;
-        logic [3:0] cfg_index;
-        logic [19:0] operand;
+        opcode_t      opcode;
+        logic [3:0]   flags;
+        logic [3:0]   cfg_index;
+        logic [19:0]  operand;
     } instr_t;
 
     // ============================================================
@@ -100,6 +100,18 @@ package rtl_pkg;
         logic [7:0]                  addr;
         logic [InitPayloadWidth-1:0] payload;
     } init_rom_word_t;
+
+    // ============================================================
+    // UART measure response packet constants
+    // ============================================================
+
+    localparam logic [7:0] MeasureRespSync0 = 8'hA5;
+    localparam logic [7:0] MeasureRespSync1 = 8'h5A;
+    localparam logic [7:0] MeasureRespType  = 8'h02;
+
+    localparam int unsigned MeasureSampleWidth = 16;
+    localparam int unsigned MeasureAccumWidth  = 32;
+    localparam int unsigned Q2_14FracBits      = 14;
 
     // ============================================================
     // Legacy demo constant

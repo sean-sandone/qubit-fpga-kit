@@ -267,13 +267,64 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // Sequencer -> formatter path
     // ============================================================
 
-    logic                formatter_start;
-    logic                formatter_is_play;
-    logic [3:0]          formatter_cfg_index;
-    play_cfg_t           formatter_play_cfg;
-    measure_cfg_t        formatter_measure_cfg;
-    logic                formatter_busy;
-    logic                formatter_done_pulse;
+    logic                 formatter_start;
+    logic                 formatter_is_play;
+    logic [3:0]           formatter_cfg_index;
+    play_cfg_t            formatter_play_cfg;
+    measure_cfg_t         formatter_measure_cfg;
+    logic                 formatter_busy;
+    logic                 formatter_done_pulse;
+
+    // ============================================================
+    // Formatter UART source
+    // ============================================================
+
+    logic [7:0] formatter_tx_data;
+    logic       formatter_tx_valid;
+    logic       formatter_tx_ready;
+
+    // ============================================================
+    // Measure response RX / processing
+    // ============================================================
+
+    logic        measure_rsp_busy;
+    logic        measure_rsp_done_pulse;
+    logic        measure_rsp_valid;
+    logic [7:0]  measure_rsp_sample_count;
+    logic signed [15:0] measure_i_avg;
+    logic signed [15:0] measure_q_avg;
+
+    // ============================================================
+    // Debug UART source
+    // ============================================================
+
+    logic        debug_start;
+    logic [7:0]  debug_tx_data;
+    logic        debug_tx_valid;
+    logic        debug_tx_ready;
+    logic        debug_busy;
+    logic        debug_done_pulse;
+
+    assign debug_start = measure_rsp_done_pulse;
+
+    // ============================================================
+    // UART TX arbitration
+    // Debug has priority over formatter if both ever assert together
+    // ============================================================
+
+    always_comb begin
+        uart_tx_data        = formatter_tx_data;
+        uart_tx_valid       = formatter_tx_valid;
+        formatter_tx_ready  = uart_tx_ready;
+        debug_tx_ready      = 1'b0;
+
+        if (debug_busy || debug_tx_valid) begin
+            uart_tx_data       = debug_tx_data;
+            uart_tx_valid      = debug_tx_valid;
+            debug_tx_ready     = uart_tx_ready;
+            formatter_tx_ready = 1'b0;
+        end
+    end
 
     instr_sequencer u_instr_sequencer (
         .clk                  (clk),
@@ -298,6 +349,8 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .formatter_busy       (formatter_busy),
         .formatter_done_pulse (formatter_done_pulse),
 
+        .measure_rsp_done_pulse(measure_rsp_done_pulse),
+
         .seq_busy             (seq_busy),
         .seq_done_pulse       (seq_done_pulse_in)
     );
@@ -312,12 +365,44 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .play_cfg    (formatter_play_cfg),
         .measure_cfg (formatter_measure_cfg),
 
-        .tx_data     (uart_tx_data),
-        .tx_valid    (uart_tx_valid),
-        .tx_ready    (uart_tx_ready),
+        .tx_data     (formatter_tx_data),
+        .tx_valid    (formatter_tx_valid),
+        .tx_ready    (formatter_tx_ready),
 
         .busy        (formatter_busy),
         .done_pulse  (formatter_done_pulse)
+    );
+
+    measure_response_rx u_measure_response_rx (
+        .clk           (clk),
+        .rst_sync_n    (rst_sync_n),
+
+        .rx_byte_valid (uart_dout_vld),
+        .rx_byte       (uart_dout),
+
+        .busy          (measure_rsp_busy),
+        .done_pulse    (measure_rsp_done_pulse),
+
+        .resp_valid    (measure_rsp_valid),
+        .sample_count  (measure_rsp_sample_count),
+        .i_avg         (measure_i_avg),
+        .q_avg         (measure_q_avg)
+    );
+
+    debug u_debug (
+        .clk        (clk),
+        .rst_sync_n (rst_sync_n),
+
+        .start      (debug_start),
+        .i_avg      (measure_i_avg),
+        .q_avg      (measure_q_avg),
+
+        .tx_data    (debug_tx_data),
+        .tx_valid   (debug_tx_valid),
+        .tx_ready   (debug_tx_ready),
+
+        .busy       (debug_busy),
+        .done_pulse (debug_done_pulse)
     );
 
 endmodule
