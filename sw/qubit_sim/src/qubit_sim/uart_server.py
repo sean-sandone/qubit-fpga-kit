@@ -16,6 +16,12 @@ AmpFullScale = 0x0100
 PhaseTurnScale = 0x10000
 NsPerSecond = 1.0e9
 
+# Signed Q2.14 fixed-point format
+Q2_14FracBits = 14
+Q2_14Scale = 1 << Q2_14FracBits
+Q2_14MinFloat = -2.0
+Q2_14MaxFloat = (32767.0 / float(Q2_14Scale))  # 1.99993896484375
+
 
 def _ts() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -227,7 +233,6 @@ def handle_cmd(obj: Dict[str, Any], fpga: VirtualFPGA, sim: QubitSim) -> Dict[st
         return {
             "ok": True,
             "n": int(len(t_ro)),
-            "t_ro_s": [float(x) for x in t_ro],
             "I": [float(x) for x in I_ro],
             "Q": [float(x) for x in Q_ro],
         }
@@ -243,31 +248,84 @@ def _clip_i16(x: int) -> int:
     return x
 
 
-def float_iq_to_interleaved_i16_bytes(I_vals, Q_vals, scale: float = 32767.0) -> bytes:
+def _float_to_q2_14_i16(value: float) -> tuple[int, bool]:
     """
-    Convert float I/Q arrays to interleaved little-endian int16 bytes:
+    Convert one float sample to signed Q2.14 int16 with saturation.
+
+    Returns:
+      (quantized_value, clipped_flag)
+    """
+    scaled = int(round(float(value) * float(Q2_14Scale)))
+    clipped = scaled > 32767 or scaled < -32768
+    return _clip_i16(scaled), clipped
+
+
+def float_iq_to_interleaved_q2_14_bytes(I_vals, Q_vals) -> tuple[bytes, Dict[str, Any]]:
+    """
+    Convert float I/Q arrays to interleaved little-endian signed Q2.14 int16 bytes:
       I0, Q0, I1, Q1, ...
 
     Example output layout for one sample pair:
       I0_lo I0_hi Q0_lo Q0_hi
+
+    Returns:
+      (payload_bytes, clip_info)
     """
     if len(I_vals) != len(Q_vals):
         raise ValueError("I and Q arrays must have the same length")
 
     packed = bytearray()
-    for i_f, q_f in zip(I_vals, Q_vals):
-        i_i16 = _clip_i16(int(round(float(i_f) * scale)))
-        q_i16 = _clip_i16(int(round(float(q_f) * scale)))
+
+    i_clip_count = 0
+    q_clip_count = 0
+    first_i_clip_idx = None
+    first_q_clip_idx = None
+    first_i_clip_val = None
+    first_q_clip_val = None
+
+    for idx, (i_f, q_f) in enumerate(zip(I_vals, Q_vals)):
+        i_i16, i_clipped = _float_to_q2_14_i16(float(i_f))
+        q_i16, q_clipped = _float_to_q2_14_i16(float(q_f))
+
+        if i_clipped:
+            i_clip_count += 1
+            if first_i_clip_idx is None:
+                first_i_clip_idx = idx
+                first_i_clip_val = float(i_f)
+
+        if q_clipped:
+            q_clip_count += 1
+            if first_q_clip_idx is None:
+                first_q_clip_idx = idx
+                first_q_clip_val = float(q_f)
+
         packed += struct.pack("<hh", i_i16, q_i16)
-    return bytes(packed)
+
+    clip_info = {
+        "any_clipped": (i_clip_count > 0 or q_clip_count > 0),
+        "i_clip_count": i_clip_count,
+        "q_clip_count": q_clip_count,
+        "first_i_clip_idx": first_i_clip_idx,
+        "first_q_clip_idx": first_q_clip_idx,
+        "first_i_clip_val": first_i_clip_val,
+        "first_q_clip_val": first_q_clip_val,
+        "q_format": "Q2.14",
+        "q_min_float": Q2_14MinFloat,
+        "q_max_float": Q2_14MaxFloat,
+    }
+
+    return bytes(packed), clip_info
 
 
-def build_waveform_packet(I_vals, Q_vals, scale: float = 32767.0) -> bytes:
+def build_waveform_packet(I_vals, Q_vals) -> tuple[bytes, Dict[str, Any]]:
     """
     Build a binary packet:
-      [0xA5][0x5A][0x02][N][interleaved int16 IQ bytes]
+      [0xA5][0x5A][0x02][N][interleaved signed Q2.14 IQ bytes]
 
     N is the number of IQ pairs and must fit in one byte.
+
+    Returns:
+      (packet_bytes, clip_info)
     """
     n = len(I_vals)
     if len(Q_vals) != n:
@@ -275,9 +333,37 @@ def build_waveform_packet(I_vals, Q_vals, scale: float = 32767.0) -> bytes:
     if n > 255:
         raise ValueError("n_readout must be <= 255 for 1-byte sample count")
 
-    payload = float_iq_to_interleaved_i16_bytes(I_vals, Q_vals, scale=scale)
+    payload, clip_info = float_iq_to_interleaved_q2_14_bytes(I_vals, Q_vals)
     header = bytes([0xA5, 0x5A, 0x02, n])
-    return header + payload
+    return header + payload, clip_info
+
+
+def _format_clip_warning(clip_info: Dict[str, Any], n_samples: int) -> str:
+    parts = [
+        "WARNING Q2.14_CLIP",
+        f'n={n_samples}',
+        f'i_clip_count={clip_info["i_clip_count"]}',
+        f'q_clip_count={clip_info["q_clip_count"]}',
+        f'range=[{clip_info["q_min_float"]:.6f}, {clip_info["q_max_float"]:.6f}]',
+    ]
+
+    if clip_info["first_i_clip_idx"] is not None:
+        parts.append(
+            f'first_i_clip_idx={clip_info["first_i_clip_idx"]}'
+        )
+        parts.append(
+            f'first_i_clip_val={clip_info["first_i_clip_val"]:.6f}'
+        )
+
+    if clip_info["first_q_clip_idx"] is not None:
+        parts.append(
+            f'first_q_clip_idx={clip_info["first_q_clip_idx"]}'
+        )
+        parts.append(
+            f'first_q_clip_val={clip_info["first_q_clip_val"]:.6f}'
+        )
+
+    return " ".join(parts)
 
 
 def run_uart_server(
@@ -337,8 +423,25 @@ def run_uart_server(
                         log_path=log_path,
                     )
 
-                # Binary packet to FPGA
-                tx_packet = build_waveform_packet(resp["I"], resp["Q"], scale=32767.0)
+                # Binary packet to FPGA, with signed Q2.14 payload
+                tx_packet, clip_info = build_waveform_packet(resp["I"], resp["Q"])
+
+                if clip_info["any_clipped"]:
+                    clip_msg = _format_clip_warning(clip_info, int(resp["n"]))
+
+                    if debug:
+                        _debug_log(
+                            clip_msg,
+                            debug=True,
+                            log_path=None,
+                        )
+
+                    if log_path is not None:
+                        _debug_log(
+                            clip_msg,
+                            debug=False,
+                            log_path=log_path,
+                        )
 
                 # File: exact binary payload as hex
                 if log_path is not None:
@@ -354,14 +457,14 @@ def run_uart_server(
 
                 if debug:
                     _debug_log(
-                        f"TX_BIN bytes={len(tx_packet)} sync=A5 5A type=02 n={resp['n']}",
+                        f"TX_BIN bytes={len(tx_packet)} sync=A5 5A type=02 n={resp['n']} fmt=Q2.14",
                         debug=True,
                         log_path=None,
                     )
 
                 if log_path is not None:
                     _debug_log(
-                        f"TX_BIN bytes={len(tx_packet)} sync=A5 5A type=02 n={resp['n']}",
+                        f"TX_BIN bytes={len(tx_packet)} sync=A5 5A type=02 n={resp['n']} fmt=Q2.14",
                         debug=False,
                         log_path=log_path,
                     )
