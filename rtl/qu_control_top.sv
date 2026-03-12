@@ -267,40 +267,172 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // Sequencer -> formatter path
     // ============================================================
 
-    logic                formatter_start;
-    logic                formatter_is_play;
-    logic [3:0]          formatter_cfg_index;
-    play_cfg_t           formatter_play_cfg;
-    measure_cfg_t        formatter_measure_cfg;
-    logic                formatter_busy;
-    logic                formatter_done_pulse;
+    logic                 formatter_start;
+    logic                 formatter_is_play;
+    logic [3:0]           formatter_cfg_index;
+    play_cfg_t            formatter_play_cfg;
+    measure_cfg_t         formatter_measure_cfg;
+    logic                 formatter_busy;
+    logic                 formatter_done_pulse;
+
+    // ============================================================
+    // Formatter UART source
+    // ============================================================
+
+    logic [7:0] formatter_tx_data;
+    logic       formatter_tx_valid;
+    logic       formatter_tx_ready;
+
+    // ============================================================
+    // Measure response RX / processing
+    // ============================================================
+
+    logic               measure_rsp_busy;
+    logic               measure_rsp_done_pulse;
+    logic               measure_rsp_valid;
+    logic [7:0]         measure_rsp_sample_count;
+    logic signed [15:0] measure_i_avg;
+    logic signed [15:0] measure_q_avg;
+
+    // ============================================================
+    // Debug UART source
+    // ============================================================
+
+    logic        debug_start;
+    logic [7:0]  debug_tx_data;
+    logic        debug_tx_valid;
+    logic        debug_tx_ready;
+    logic        debug_busy;
+    logic        debug_done_pulse;
+    logic        debug_pending_r;
+
+    // ============================================================
+    // Message-atomic UART TX arbitration
+    // One source owns the UART until its full message is complete
+    // ============================================================
+
+    typedef enum logic [1:0] {
+        TxOwnerNone      = 2'd0,
+        TxOwnerFormatter = 2'd1,
+        TxOwnerDebug     = 2'd2
+    } tx_owner_t;
+
+    tx_owner_t tx_owner_r;
+
+    always_ff @(posedge clk) begin
+        if (!rst_sync_n) begin
+            tx_owner_r <= TxOwnerNone;
+        end else begin
+            case (tx_owner_r)
+                TxOwnerNone: begin
+                    if (formatter_busy) begin
+                        tx_owner_r <= TxOwnerFormatter;
+                    end else if (debug_busy) begin
+                        tx_owner_r <= TxOwnerDebug;
+                    end
+                end
+
+                TxOwnerFormatter: begin
+                    if (formatter_done_pulse) begin
+                        tx_owner_r <= TxOwnerNone;
+                    end
+                end
+
+                TxOwnerDebug: begin
+                    if (debug_done_pulse) begin
+                        tx_owner_r <= TxOwnerNone;
+                    end
+                end
+
+                default: begin
+                    tx_owner_r <= TxOwnerNone;
+                end
+            endcase
+        end
+    end
+
+    // ============================================================
+    // Latch debug requests until UART ownership is available
+    // ============================================================
+
+    always_ff @(posedge clk) begin
+        if (!rst_sync_n) begin
+            debug_pending_r <= 1'b0;
+        end else begin
+            if (measure_rsp_done_pulse) begin
+                debug_pending_r <= 1'b1;
+            end else if (debug_start) begin
+                debug_pending_r <= 1'b0;
+            end
+        end
+    end
+
+    assign debug_start = debug_pending_r && (tx_owner_r == TxOwnerNone);
+
+    // ============================================================
+    // UART TX routing by locked owner
+    // ============================================================
+
+    always_comb begin
+        uart_tx_data       = 8'h00;
+        uart_tx_valid      = 1'b0;
+        formatter_tx_ready = 1'b0;
+        debug_tx_ready     = 1'b0;
+
+        case (tx_owner_r)
+            TxOwnerFormatter: begin
+                uart_tx_data       = formatter_tx_data;
+                uart_tx_valid      = formatter_tx_valid;
+                formatter_tx_ready = uart_tx_ready;
+            end
+
+            TxOwnerDebug: begin
+                uart_tx_data   = debug_tx_data;
+                uart_tx_valid  = debug_tx_valid;
+                debug_tx_ready = uart_tx_ready;
+            end
+
+            default: begin
+            end
+        endcase
+    end
+
+    // ============================================================
+    // Sequencer
+    // ============================================================
 
     instr_sequencer u_instr_sequencer (
-        .clk                  (clk),
-        .rst_sync_n           (rst_sync_n),
+        .clk                   (clk),
+        .rst_sync_n            (rst_sync_n),
 
-        .init_done            (init_done),
+        .init_done             (init_done),
 
-        .rd_instr_addr        (rd_instr_addr),
-        .rd_instr_data        (rd_instr_data),
+        .rd_instr_addr         (rd_instr_addr),
+        .rd_instr_data         (rd_instr_data),
 
-        .rd_play_cfg_addr     (rd_play_cfg_addr),
-        .rd_play_cfg_data     (rd_play_cfg_data),
+        .rd_play_cfg_addr      (rd_play_cfg_addr),
+        .rd_play_cfg_data      (rd_play_cfg_data),
 
-        .rd_measure_cfg_addr  (rd_measure_cfg_addr),
-        .rd_measure_cfg_data  (rd_measure_cfg_data),
+        .rd_measure_cfg_addr   (rd_measure_cfg_addr),
+        .rd_measure_cfg_data   (rd_measure_cfg_data),
 
-        .formatter_start      (formatter_start),
-        .formatter_is_play    (formatter_is_play),
-        .formatter_cfg_index  (formatter_cfg_index),
-        .formatter_play_cfg   (formatter_play_cfg),
-        .formatter_measure_cfg(formatter_measure_cfg),
-        .formatter_busy       (formatter_busy),
-        .formatter_done_pulse (formatter_done_pulse),
+        .formatter_start       (formatter_start),
+        .formatter_is_play     (formatter_is_play),
+        .formatter_cfg_index   (formatter_cfg_index),
+        .formatter_play_cfg    (formatter_play_cfg),
+        .formatter_measure_cfg (formatter_measure_cfg),
+        .formatter_busy        (formatter_busy),
+        .formatter_done_pulse  (formatter_done_pulse),
 
-        .seq_busy             (seq_busy),
-        .seq_done_pulse       (seq_done_pulse_in)
+        .measure_rsp_done_pulse(measure_rsp_done_pulse),
+
+        .seq_busy              (seq_busy),
+        .seq_done_pulse        (seq_done_pulse_in)
     );
+
+    // ============================================================
+    // Command formatter
+    // ============================================================
 
     cmd_formatter u_cmd_formatter (
         .clk         (clk),
@@ -312,12 +444,52 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .play_cfg    (formatter_play_cfg),
         .measure_cfg (formatter_measure_cfg),
 
-        .tx_data     (uart_tx_data),
-        .tx_valid    (uart_tx_valid),
-        .tx_ready    (uart_tx_ready),
+        .tx_data     (formatter_tx_data),
+        .tx_valid    (formatter_tx_valid),
+        .tx_ready    (formatter_tx_ready),
 
         .busy        (formatter_busy),
         .done_pulse  (formatter_done_pulse)
+    );
+
+    // ============================================================
+    // Measure response receiver
+    // ============================================================
+
+    measure_response_rx u_measure_response_rx (
+        .clk           (clk),
+        .rst_sync_n    (rst_sync_n),
+
+        .rx_byte_valid (uart_dout_vld),
+        .rx_byte       (uart_dout),
+
+        .busy          (measure_rsp_busy),
+        .done_pulse    (measure_rsp_done_pulse),
+
+        .resp_valid    (measure_rsp_valid),
+        .sample_count  (measure_rsp_sample_count),
+        .i_avg         (measure_i_avg),
+        .q_avg         (measure_q_avg)
+    );
+
+    // ============================================================
+    // Debug formatter
+    // ============================================================
+
+    debug u_debug (
+        .clk        (clk),
+        .rst_sync_n (rst_sync_n),
+
+        .start      (debug_start),
+        .i_avg      (measure_i_avg),
+        .q_avg      (measure_q_avg),
+
+        .tx_data    (debug_tx_data),
+        .tx_valid   (debug_tx_valid),
+        .tx_ready   (debug_tx_ready),
+
+        .busy       (debug_busy),
+        .done_pulse (debug_done_pulse)
     );
 
 endmodule

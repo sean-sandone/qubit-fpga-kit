@@ -128,6 +128,32 @@ def _ns_to_seconds(ns: int) -> float:
     return float(ns) / float(NsPerSecond)
 
 
+def _q2_14_i16_to_float(value: Any) -> float:
+    return float(_parse_int_like(value)) / float(Q2_14Scale)
+
+
+def _format_debug_measure_info(obj: Dict[str, Any]) -> str:
+    msg = str(obj.get("msg", "")).strip()
+    i_avg_raw = _parse_int_like(obj.get("I_avg", 0))
+    q_avg_raw = _parse_int_like(obj.get("Q_avg", 0))
+
+    i_avg_dec = _q2_14_i16_to_float(i_avg_raw)
+    q_avg_dec = _q2_14_i16_to_float(q_avg_raw)
+
+    if msg:
+        return (
+            'DEBUG '
+            f'{{"msg":"{msg}","I_avg_q2_14":{i_avg_raw},"Q_avg_q2_14":{q_avg_raw},'
+            f'"I_avg":{i_avg_dec:.6f},"Q_avg":{q_avg_dec:.6f}}}'
+        )
+
+    return (
+        'DEBUG '
+        f'{{"I_avg_q2_14":{i_avg_raw},"Q_avg_q2_14":{q_avg_raw},'
+        f'"I_avg":{i_avg_dec:.6f},"Q_avg":{q_avg_dec:.6f}}}'
+    )
+
+
 def _decode_play(obj: Dict[str, Any]) -> Dict[str, Any]:
     envelope_raw = str(obj.get("envelope", "SQUARE")).strip().upper()
 
@@ -402,6 +428,49 @@ def run_uart_server(
 
             try:
                 obj = json.loads(rx_text)
+            except Exception as e:
+                resp = {"ok": False, "err": str(e)}
+
+                tx_text = json.dumps(resp)
+
+                if debug:
+                    _debug_log(
+                        f"INFO {tx_text}",
+                        debug=True,
+                        log_path=None,
+                    )
+
+                if log_path is not None:
+                    _debug_log(
+                        f"INFO {tx_text}",
+                        debug=False,
+                        log_path=log_path,
+                    )
+
+                continue
+
+            cmd = str(obj.get("cmd", "")).upper()
+
+            if cmd == "DEBUG":
+                debug_line = _format_debug_measure_info(obj)
+
+                if debug:
+                    _debug_log(
+                        debug_line,
+                        debug=True,
+                        log_path=None,
+                    )
+
+                if log_path is not None:
+                    _debug_log(
+                        debug_line,
+                        debug=False,
+                        log_path=log_path,
+                    )
+
+                continue
+
+            try:
                 resp = handle_cmd(obj, fpga, sim)
             except Exception as e:
                 resp = {"ok": False, "err": str(e)}
@@ -468,8 +537,9 @@ def run_uart_server(
                         debug=False,
                         log_path=log_path,
                     )
-            else:
-                # Keep non-waveform responses as JSON text
+
+            elif resp.get("ok") and resp.get("msg") == "PONG":
+                # Only PING response is transmitted as JSON text
                 tx_text = json.dumps(resp)
 
                 if debug:
@@ -488,6 +558,24 @@ def run_uart_server(
 
                 ser.write((tx_text + "\n").encode("utf-8"))
                 ser.flush()
+
+            else:
+                # All other responses are log-only
+                tx_text = json.dumps(resp)
+
+                if debug:
+                    _debug_log(
+                        f"INFO {tx_text}",
+                        debug=True,
+                        log_path=None,
+                    )
+
+                if log_path is not None:
+                    _debug_log(
+                        f"INFO {tx_text}",
+                        debug=False,
+                        log_path=log_path,
+                    )
 
 
 if __name__ == "__main__":
