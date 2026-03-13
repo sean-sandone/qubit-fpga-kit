@@ -39,8 +39,9 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // async assert, sync deassert
     // ============================================================
 
-    logic rst_ff1_n;
-    logic rst_ff2_n;
+    // Vivado synth attributes to prevent optimization of synchronizer flip-flops
+    (* ASYNC_REG = "TRUE", KEEP = "TRUE" *) logic rst_ff1_n;
+    (* ASYNC_REG = "TRUE", KEEP = "TRUE" *) logic rst_ff2_n;
     logic rst_sync_n;
     logic rst_sync;
 
