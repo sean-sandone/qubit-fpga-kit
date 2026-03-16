@@ -1,3 +1,10 @@
+//------------------------------------------------------------------------------
+// PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
+//------------------------------------------------------------------------------
+// AUTHORS: Sean Sandone
+// WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
+//------------------------------------------------------------------------------
+
 module init_loader (
     input  logic clk,
     input  logic rst_sync_n,

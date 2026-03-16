@@ -37,5 +37,16 @@ set_property IOSTANDARD  LVCMOS18 [get_ports GPIO_LED_6_LS]
 set_property PACKAGE_PIN P23      [get_ports GPIO_LED_7_LS] 
 set_property IOSTANDARD  LVCMOS18 [get_ports GPIO_LED_7_LS] 
 
-## UART RX is async 
+## Async reset path
+set_false_path -from [get_ports CPU_RESET] -to [get_pins rst_ff1_n_reg/D]
+
+## -------------
+## Async signals 
+## -------------
+# input from UART
 set_false_path -from [get_ports USB_UART_TX]
+# output to UART
+set_false_path -to [get_ports USB_UART_RX]
+# LEDs
+set_false_path -to [get_ports {GPIO_LED_0_LS GPIO_LED_1_LS GPIO_LED_2_LS GPIO_LED_3_LS \
+                               GPIO_LED_4_LS GPIO_LED_5_LS GPIO_LED_6_LS GPIO_LED_7_LS}]
