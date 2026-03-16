@@ -1,3 +1,10 @@
+//------------------------------------------------------------------------------
+// PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
+//------------------------------------------------------------------------------
+// AUTHORS: Sean Sandone
+// WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
+//------------------------------------------------------------------------------
+
 module qu_control_top #(  // Xilinx KCU105 Eval Board
     parameter int CLK_FREQ_HZ = 125_000_000,
     parameter int BAUD_RATE   = 115200,

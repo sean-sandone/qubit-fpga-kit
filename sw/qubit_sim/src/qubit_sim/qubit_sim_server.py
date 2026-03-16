@@ -1,3 +1,10 @@
+##------------------------------------------------------------------------------
+## PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
+##------------------------------------------------------------------------------
+## AUTHORS: Sean Sandone
+## WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
+##------------------------------------------------------------------------------
+
 import struct
 from qubit_sim.qubit_model import QubitSim
 

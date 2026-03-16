@@ -1,3 +1,10 @@
+//------------------------------------------------------------------------------
+// PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
+//------------------------------------------------------------------------------
+// AUTHORS: Sean Sandone
+// WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
+//------------------------------------------------------------------------------
+
 module defaults_rom (
     input  logic [rtl_pkg::InitRomAw-1:0] rom_addr,
     output rtl_pkg::init_rom_word_t       rom_word
