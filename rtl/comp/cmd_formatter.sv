@@ -9,10 +9,11 @@ module cmd_formatter (
     input  logic clk,
     input  logic rst_sync_n,
 
-    input  logic               start,
-    input  logic               is_play,
-    input  logic [3:0]         cfg_index,
-    input  rtl_pkg::play_cfg_t play_cfg,
+    input  logic                  start,
+    input  logic                  is_play,
+    input  logic                  is_reset,
+    input  logic [3:0]            cfg_index,
+    input  rtl_pkg::play_cfg_t    play_cfg,
     input  rtl_pkg::measure_cfg_t measure_cfg,
 
     output logic [7:0] tx_data,
@@ -34,6 +35,7 @@ module cmd_formatter (
     fmt_state_t state_r;
 
     logic         is_play_r;
+    logic         is_reset_r;
     logic [3:0]   cfg_index_r;
     play_cfg_t    play_cfg_r;
     measure_cfg_t measure_cfg_r;
@@ -500,20 +502,63 @@ module cmd_formatter (
         endcase
     endfunction
 
+    function automatic logic [5:0] reset_seg_len(input logic [5:0] seg);
+        case (seg)
+            default: reset_seg_len = 6'd16; // {"cmd":"RESET"}\n
+        endcase
+    endfunction
+
+    function automatic logic [7:0] reset_seg_byte(
+        input logic [5:0] seg,
+        input logic [5:0] idx
+    );
+        case (seg)
+            default: begin
+                case (idx)
+                    0:  reset_seg_byte = "{";
+                    1:  reset_seg_byte = "\"";
+                    2:  reset_seg_byte = "c";
+                    3:  reset_seg_byte = "m";
+                    4:  reset_seg_byte = "d";
+                    5:  reset_seg_byte = "\"";
+                    6:  reset_seg_byte = ":";
+                    7:  reset_seg_byte = "\"";
+                    8:  reset_seg_byte = "R";
+                    9:  reset_seg_byte = "E";
+                    10: reset_seg_byte = "S";
+                    11: reset_seg_byte = "E";
+                    12: reset_seg_byte = "T";
+                    13: reset_seg_byte = "\"";
+                    14: reset_seg_byte = "}";
+                    default: reset_seg_byte = 8'h0A;
+                endcase
+            end
+        endcase
+    endfunction
+
     function automatic logic [5:0] seg_len_now(
         input logic is_play_v,
+        input logic is_reset_v,
         input logic [5:0] seg_v,
         input play_cfg_t play_cfg_v
     );
-        if (is_play_v) begin
+        if (is_reset_v) begin
+            seg_len_now = reset_seg_len(seg_v);
+        end else if (is_play_v) begin
             seg_len_now = play_seg_len(seg_v, play_cfg_v);
         end else begin
             seg_len_now = meas_seg_len(seg_v);
         end
     endfunction
 
-    function automatic logic last_seg_now(input logic is_play_v, input logic [5:0] seg_v);
-        if (is_play_v) begin
+    function automatic logic last_seg_now(
+        input logic is_play_v,
+        input logic is_reset_v,
+        input logic [5:0] seg_v
+    );
+        if (is_reset_v) begin
+            last_seg_now = 1'b1;
+        end else if (is_play_v) begin
             last_seg_now = (seg_v == 6'd16);
         end else begin
             last_seg_now = (seg_v == 6'd8);
@@ -524,6 +569,7 @@ module cmd_formatter (
         if (!rst_sync_n) begin
             state_r       <= FmtStateIdle;
             is_play_r     <= 1'b0;
+            is_reset_r    <= 1'b0;
             cfg_index_r   <= 4'd0;
             play_cfg_r    <= '0;
             measure_cfg_r <= '0;
@@ -537,6 +583,7 @@ module cmd_formatter (
                 FmtStateIdle: begin
                     if (start) begin
                         is_play_r     <= is_play;
+                        is_reset_r    <= is_reset;
                         cfg_index_r   <= cfg_index;
                         play_cfg_r    <= play_cfg;
                         measure_cfg_r <= measure_cfg;
@@ -548,8 +595,8 @@ module cmd_formatter (
 
                 FmtStateSend: begin
                     if (tx_ready) begin
-                        if (char_idx_r == seg_len_now(is_play_r, seg_r, play_cfg_r) - 1) begin
-                            if (last_seg_now(is_play_r, seg_r)) begin
+                        if (char_idx_r == seg_len_now(is_play_r, is_reset_r, seg_r, play_cfg_r) - 1'b1) begin
+                            if (last_seg_now(is_play_r, is_reset_r, seg_r)) begin
                                 state_r    <= FmtStateDone;
                                 done_pulse <= 1'b1;
                             end else begin
@@ -577,7 +624,9 @@ module cmd_formatter (
         busy     = (state_r == FmtStateSend);
         tx_valid = (state_r == FmtStateSend);
 
-        if (is_play_r) begin
+        if (is_reset_r) begin
+            tx_data = reset_seg_byte(seg_r, char_idx_r);
+        end else if (is_play_r) begin
             tx_data = play_seg_byte(seg_r, char_idx_r, cfg_index_r, play_cfg_r);
         end else begin
             tx_data = meas_seg_byte(seg_r, char_idx_r, cfg_index_r, measure_cfg_r);

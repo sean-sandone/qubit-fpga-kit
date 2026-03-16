@@ -67,7 +67,7 @@ module defaults_rom (
             // ============================================================
 
             2: begin
-                meas_cfg_v.n_readout = 16'd64;
+                meas_cfg_v.n_readout  = 16'd64;
                 meas_cfg_v.readout_ns = 32'd1024;
                 meas_cfg_v.ringup_ns  = 32'd512;
 
@@ -77,10 +77,20 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 0: PLAY cfg 0
+            // Default reset-wait register preload
             // ============================================================
 
             3: begin
+                rom_word_r.op            = INIT_OP_RESET_WAIT;
+                rom_word_r.addr          = 8'd0;
+                rom_word_r.payload[31:0] = 32'd1000;
+            end
+
+            // ============================================================
+            // Instr 0: PLAY cfg 0
+            // ============================================================
+
+            4: begin
                 instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -95,7 +105,7 @@ module defaults_rom (
             // Instr 1: WAIT 100
             // ============================================================
 
-            4: begin
+            5: begin
                 instr_v.opcode    = OP_WAIT;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -110,7 +120,7 @@ module defaults_rom (
             // Instr 2: PLAY cfg 1
             // ============================================================
 
-            5: begin
+            6: begin
                 instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd1;
@@ -125,7 +135,7 @@ module defaults_rom (
             // Instr 3: MEASURE cfg 0
             // ============================================================
 
-            6: begin
+            7: begin
                 instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -140,7 +150,7 @@ module defaults_rom (
             // Instr 4: END
             // ============================================================
 
-            7: begin
+            8: begin
                 instr_v.opcode    = OP_END;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -155,7 +165,7 @@ module defaults_rom (
             // End of init stream
             // ============================================================
 
-            8: begin
+            9: begin
                 rom_word_r.op      = INIT_OP_END;
                 rom_word_r.addr    = 8'd0;
                 rom_word_r.payload = '0;

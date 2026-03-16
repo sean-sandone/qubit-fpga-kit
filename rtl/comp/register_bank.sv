@@ -18,6 +18,13 @@ module register_bank (
     input  logic control_soft_reset_in,
 
     // ============================================================
+    // Reset-wait register write interface
+    // ============================================================
+
+    input  logic        wr_reset_wait_cycles,
+    input  logic [31:0] wr_reset_wait_cycles_data,
+
+    // ============================================================
     // Play config memory write interface
     // ============================================================
 
@@ -68,6 +75,7 @@ module register_bank (
 
     output logic start_exp,
     output logic soft_reset_req,
+    output logic [31:0] reset_wait_cycles,
 
     output logic play_cfg_any_valid,
     output logic measure_cfg_any_valid,
@@ -95,9 +103,10 @@ module register_bank (
     // Control / status registers
     // ============================================================
 
-    logic start_exp_r;
-    logic soft_reset_req_r;
-    logic seq_done_sticky_r;
+    logic        start_exp_r;
+    logic        soft_reset_req_r;
+    logic        seq_done_sticky_r;
+    logic [31:0] reset_wait_cycles_r;
 
     // ============================================================
     // Read data registers
@@ -115,9 +124,10 @@ module register_bank (
 
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
-            start_exp_r       <= 1'b0;
-            soft_reset_req_r  <= 1'b0;
-            seq_done_sticky_r <= 1'b0;
+            start_exp_r         <= 1'b0;
+            soft_reset_req_r    <= 1'b0;
+            seq_done_sticky_r   <= 1'b0;
+            reset_wait_cycles_r <= 32'd0;
 
             for (i = 0; i < PlayCfgDepth; i = i + 1) begin
                 play_cfg_mem_r[i]   <= '0;
@@ -145,6 +155,10 @@ module register_bank (
                 if (control_soft_reset_in) begin
                     soft_reset_req_r <= 1'b1;
                 end
+            end
+
+            if (wr_reset_wait_cycles) begin
+                reset_wait_cycles_r <= wr_reset_wait_cycles_data;
             end
 
             if (clear_start_exp) begin
@@ -192,8 +206,9 @@ module register_bank (
     assign rd_play_cfg_data    = rd_play_cfg_data_r;
     assign rd_measure_cfg_data = rd_measure_cfg_data_r;
 
-    assign start_exp      = start_exp_r;
-    assign soft_reset_req = soft_reset_req_r;
+    assign start_exp         = start_exp_r;
+    assign soft_reset_req    = soft_reset_req_r;
+    assign reset_wait_cycles = reset_wait_cycles_r;
 
     assign play_cfg_any_valid    = |play_cfg_valid_r;
     assign measure_cfg_any_valid = |measure_cfg_valid_r;
