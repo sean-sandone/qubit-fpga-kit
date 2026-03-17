@@ -10,28 +10,30 @@ module instr_sequencer (
     input  logic rst_sync_n,
 
     input  logic init_done,
+    input  logic [31:0] reset_wait_cycles,
 
-    output logic [rtl_pkg::InstrAw-1:0]    rd_instr_addr,
-    input  rtl_pkg::instr_t                rd_instr_data,
+    output logic [rtl_pkg::InstrAw-1:0]   rd_instr_addr,
+    input  rtl_pkg::instr_t               rd_instr_data,
 
-    output logic [rtl_pkg::PlayCfgAw-1:0]  rd_play_cfg_addr,
-    input  rtl_pkg::play_cfg_t             rd_play_cfg_data,
+    output logic [rtl_pkg::PlayCfgAw-1:0] rd_play_cfg_addr,
+    input  rtl_pkg::play_cfg_t            rd_play_cfg_data,
 
-    output logic [rtl_pkg::MeasCfgAw-1:0]  rd_measure_cfg_addr,
-    input  rtl_pkg::measure_cfg_t          rd_measure_cfg_data,
+    output logic [rtl_pkg::MeasCfgAw-1:0] rd_measure_cfg_addr,
+    input  rtl_pkg::measure_cfg_t         rd_measure_cfg_data,
 
-    output logic                           formatter_start,
-    output logic                           formatter_is_play,
-    output logic [3:0]                     formatter_cfg_index,
-    output rtl_pkg::play_cfg_t             formatter_play_cfg,
-    output rtl_pkg::measure_cfg_t          formatter_measure_cfg,
-    input  logic                           formatter_busy,
-    input  logic                           formatter_done_pulse,
+    output logic                          formatter_start,
+    output logic                          formatter_is_play,
+    output logic                          formatter_is_reset,
+    output logic [3:0]                    formatter_cfg_index,
+    output rtl_pkg::play_cfg_t            formatter_play_cfg,
+    output rtl_pkg::measure_cfg_t         formatter_measure_cfg,
+    input  logic                          formatter_busy,
+    input  logic                          formatter_done_pulse,
 
-    input  logic                           measure_rsp_done_pulse,
+    input  logic                          measure_rsp_done_pulse,
 
-    output logic                           seq_busy,
-    output logic                           seq_done_pulse
+    output logic                          seq_busy,
+    output logic                          seq_done_pulse
 );
 
     import rtl_pkg::*;
@@ -45,7 +47,8 @@ module instr_sequencer (
         SeqStateWaitFormat      = 4'd5,
         SeqStateWaitCycles      = 4'd6,
         SeqStateWaitMeasureRsp  = 4'd7,
-        SeqStateDone            = 4'd8
+        SeqStateDone            = 4'd8,
+        SeqStateStartReset      = 4'd9
     } seq_state_t;
 
     seq_state_t state_r;
@@ -55,6 +58,7 @@ module instr_sequencer (
     logic [31:0]        wait_count_r;
     logic               started_r;
     logic               last_was_play_r;
+    logic               last_was_reset_r;
 
     assign rd_instr_addr       = pc_r;
     assign rd_play_cfg_addr    = cfg_index_r[PlayCfgAw-1:0];
@@ -64,17 +68,19 @@ module instr_sequencer (
     assign formatter_play_cfg    = rd_play_cfg_data;
     assign formatter_measure_cfg = rd_measure_cfg_data;
     assign formatter_is_play     = last_was_play_r;
+    assign formatter_is_reset    = last_was_reset_r;
 
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
-            state_r         <= SeqStateIdle;
-            pc_r            <= '0;
-            cfg_index_r     <= '0;
-            wait_count_r    <= '0;
-            started_r       <= 1'b0;
-            last_was_play_r <= 1'b0;
-            formatter_start <= 1'b0;
-            seq_done_pulse  <= 1'b0;
+            state_r          <= SeqStateIdle;
+            pc_r             <= '0;
+            cfg_index_r      <= '0;
+            wait_count_r     <= '0;
+            started_r        <= 1'b0;
+            last_was_play_r  <= 1'b0;
+            last_was_reset_r <= 1'b0;
+            formatter_start  <= 1'b0;
+            seq_done_pulse   <= 1'b0;
         end else begin
             formatter_start <= 1'b0;
             seq_done_pulse  <= 1'b0;
@@ -100,15 +106,17 @@ module instr_sequencer (
                         end
 
                         OP_PLAY: begin
-                            cfg_index_r     <= rd_instr_data.cfg_index;
-                            last_was_play_r <= 1'b1;
-                            state_r         <= SeqStateStartPlay;
+                            cfg_index_r      <= rd_instr_data.cfg_index;
+                            last_was_play_r  <= 1'b1;
+                            last_was_reset_r <= 1'b0;
+                            state_r          <= SeqStateStartPlay;
                         end
 
                         OP_MEASURE: begin
-                            cfg_index_r     <= rd_instr_data.cfg_index;
-                            last_was_play_r <= 1'b0;
-                            state_r         <= SeqStateStartMeasure;
+                            cfg_index_r      <= rd_instr_data.cfg_index;
+                            last_was_play_r  <= 1'b0;
+                            last_was_reset_r <= 1'b0;
+                            state_r          <= SeqStateStartMeasure;
                         end
 
                         OP_WAIT: begin
@@ -124,6 +132,13 @@ module instr_sequencer (
                         OP_JUMP: begin
                             pc_r    <= rd_instr_data.operand[InstrAw-1:0];
                             state_r <= SeqStateFetch;
+                        end
+
+                        OP_WAIT_RESET: begin
+                            cfg_index_r      <= 4'd0;
+                            last_was_play_r  <= 1'b0;
+                            last_was_reset_r <= 1'b1;
+                            state_r          <= SeqStateStartReset;
                         end
 
                         OP_END: begin
@@ -152,11 +167,26 @@ module instr_sequencer (
                     end
                 end
 
+                SeqStateStartReset: begin
+                    if (!formatter_busy) begin
+                        formatter_start <= 1'b1;
+                        state_r         <= SeqStateWaitFormat;
+                    end
+                end
+
                 SeqStateWaitFormat: begin
                     if (formatter_done_pulse) begin
                         if (last_was_play_r) begin
                             pc_r    <= pc_r + 1'b1;
                             state_r <= SeqStateFetch;
+                        end else if (last_was_reset_r) begin
+                            if (reset_wait_cycles == 32'd0) begin
+                                pc_r    <= pc_r + 1'b1;
+                                state_r <= SeqStateFetch;
+                            end else begin
+                                wait_count_r <= reset_wait_cycles - 1'b1;
+                                state_r      <= SeqStateWaitCycles;
+                            end
                         end else begin
                             state_r <= SeqStateWaitMeasureRsp;
                         end

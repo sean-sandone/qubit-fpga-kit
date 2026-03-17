@@ -24,6 +24,9 @@ module init_loader (
     output logic                          control_start_exp_in,
     output logic                          control_soft_reset_in,
 
+    output logic                          wr_reset_wait_cycles,
+    output logic [31:0]                   wr_reset_wait_cycles_data,
+
     output logic                          wr_play_cfg,
     output logic [rtl_pkg::PlayCfgAw-1:0] wr_play_cfg_addr,
     output rtl_pkg::play_cfg_t            wr_play_cfg_data,
@@ -97,6 +100,9 @@ module init_loader (
         control_start_exp_in  = 1'b0;
         control_soft_reset_in = 1'b0;
 
+        wr_reset_wait_cycles      = 1'b0;
+        wr_reset_wait_cycles_data = 32'd0;
+
         wr_play_cfg           = 1'b0;
         wr_play_cfg_addr      = '0;
         wr_play_cfg_data      = '0;
@@ -148,6 +154,11 @@ module init_loader (
                         wr_control            = 1'b1;
                         control_start_exp_in  = rom_word.payload[0];
                         control_soft_reset_in = rom_word.payload[1];
+                    end
+
+                    INIT_OP_RESET_WAIT: begin
+                        wr_reset_wait_cycles      = 1'b1;
+                        wr_reset_wait_cycles_data = rom_word.payload[31:0];
                     end
 
                     INIT_OP_END: begin

@@ -10,12 +10,13 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     parameter int BAUD_RATE   = 115200,
     parameter int unsigned STEP_HZ = 5  // used for led blink timing
 )(
+    input  logic clk_125mhz_p,
+    input  logic clk_125mhz_n,
+
     input  logic USB_UART_TX,  // labeled from the perspective of the USB UART transceiver chip
     output logic USB_UART_RX,  // labeled from the perspective of the USB UART transceiver chip
 
-    input  logic clk_125mhz_p,
-    input  logic clk_125mhz_n,
-    input  logic CPU_RESET,    // active high async reset (input)
+    input  logic CPU_RESET,  // active high async reset (input)
 
     output logic GPIO_LED_0_LS,
     output logic GPIO_LED_1_LS,
@@ -35,22 +36,23 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
     logic clk;
 
-    IBUFDS ibufds_sysclk (
-        .I (clk_125mhz_p),
-        .IB(clk_125mhz_n),
-        .O (clk)
+    IBUFDS u_ibufds_clk125 (
+        .I  (clk_125mhz_p),
+        .IB (clk_125mhz_n),
+        .O  (clk)
     );
 
     // ============================================================
     // Reset synchronizer
-    // async assert, sync deassert
+    // CPU_RESET is active-high on the board button
+    // Internal reset is active-low for the design
     // ============================================================
 
+    logic rst_sync;
+    logic rst_sync_n;
     // Vivado synth attributes to prevent optimization of synchronizer flip-flops
     (* ASYNC_REG = "TRUE", KEEP = "TRUE" *) logic rst_ff1_n;
     (* ASYNC_REG = "TRUE", KEEP = "TRUE" *) logic rst_ff2_n;
-    logic rst_sync_n;
-    logic rst_sync;
 
     always_ff @(posedge clk or posedge CPU_RESET) begin
         if (CPU_RESET) begin
@@ -144,6 +146,9 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic                 init_control_start_exp;
     logic                 init_control_soft_reset;
 
+    logic                 init_wr_reset_wait_cycles;
+    logic [31:0]          init_wr_reset_wait_cycles_data;
+
     logic                 init_wr_play_cfg;
     logic [PlayCfgAw-1:0] init_wr_play_cfg_addr;
     play_cfg_t            init_wr_play_cfg_data;
@@ -174,6 +179,9 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .wr_control            (init_wr_control),
         .control_start_exp_in  (init_control_start_exp),
         .control_soft_reset_in (init_control_soft_reset),
+
+        .wr_reset_wait_cycles      (init_wr_reset_wait_cycles),
+        .wr_reset_wait_cycles_data (init_wr_reset_wait_cycles_data),
 
         .wr_play_cfg           (init_wr_play_cfg),
         .wr_play_cfg_addr      (init_wr_play_cfg_addr),
@@ -208,8 +216,9 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // Register bank status / control
     // ============================================================
 
-    logic start_exp;
-    logic soft_reset_req;
+    logic        start_exp;
+    logic        soft_reset_req;
+    logic [31:0] reset_wait_cycles;
 
     logic play_cfg_any_valid;
     logic measure_cfg_any_valid;
@@ -234,6 +243,9 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .wr_control            (init_wr_control),
         .control_start_exp_in  (init_control_start_exp),
         .control_soft_reset_in (init_control_soft_reset),
+
+        .wr_reset_wait_cycles      (init_wr_reset_wait_cycles),
+        .wr_reset_wait_cycles_data (init_wr_reset_wait_cycles_data),
 
         .wr_play_cfg           (init_wr_play_cfg),
         .wr_play_cfg_addr      (init_wr_play_cfg_addr),
@@ -262,6 +274,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .start_exp             (start_exp),
         .soft_reset_req        (soft_reset_req),
+        .reset_wait_cycles     (reset_wait_cycles),
 
         .play_cfg_any_valid    (play_cfg_any_valid),
         .measure_cfg_any_valid (measure_cfg_any_valid),
@@ -277,6 +290,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
     logic                 formatter_start;
     logic                 formatter_is_play;
+    logic                 formatter_is_reset;
     logic [3:0]           formatter_cfg_index;
     play_cfg_t            formatter_play_cfg;
     measure_cfg_t         formatter_measure_cfg;
@@ -414,6 +428,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .rst_sync_n            (rst_sync_n),
 
         .init_done             (init_done),
+        .reset_wait_cycles     (reset_wait_cycles),
 
         .rd_instr_addr         (rd_instr_addr),
         .rd_instr_data         (rd_instr_data),
@@ -426,6 +441,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .formatter_start       (formatter_start),
         .formatter_is_play     (formatter_is_play),
+        .formatter_is_reset    (formatter_is_reset),
         .formatter_cfg_index   (formatter_cfg_index),
         .formatter_play_cfg    (formatter_play_cfg),
         .formatter_measure_cfg (formatter_measure_cfg),
@@ -448,6 +464,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .start       (formatter_start),
         .is_play     (formatter_is_play),
+        .is_reset    (formatter_is_reset),
         .cfg_index   (formatter_cfg_index),
         .play_cfg    (formatter_play_cfg),
         .measure_cfg (formatter_measure_cfg),

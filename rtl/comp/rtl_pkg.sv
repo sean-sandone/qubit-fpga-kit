@@ -11,26 +11,19 @@ package rtl_pkg;
     // Basic command / opcode definitions
     // ============================================================
 
-    typedef enum logic [7:0] {
-        CMD_NOP      = 8'h00,
-        CMD_PLAY     = 8'h01,
-        CMD_MEASURE  = 8'h02,
-        CMD_RESET    = 8'h03,
-        CMD_PING     = 8'h04
-    } cmd_type_t;
-
     typedef enum logic [3:0] {
         ENV_SQUARE = 4'd0,
         ENV_GAUSS  = 4'd1
     } envelope_t;
 
     typedef enum logic [3:0] {
-        OP_NOP      = 4'd0,
-        OP_PLAY     = 4'd1,
-        OP_MEASURE  = 4'd2,
-        OP_WAIT     = 4'd3,
-        OP_END      = 4'd4,
-        OP_JUMP     = 4'd5
+        OP_NOP        = 4'd0,
+        OP_PLAY       = 4'd1,
+        OP_MEASURE    = 4'd2,
+        OP_WAIT       = 4'd3,
+        OP_END        = 4'd4,
+        OP_JUMP       = 4'd5,
+        OP_WAIT_RESET = 4'd6
     } opcode_t;
 
     typedef enum logic [1:0] {
@@ -41,12 +34,13 @@ package rtl_pkg;
     } uart_tx_state_t;
 
     typedef enum logic [2:0] {
-        INIT_OP_NOP      = 3'd0,
-        INIT_OP_PLAY_CFG = 3'd1,
-        INIT_OP_MEAS_CFG = 3'd2,
-        INIT_OP_INSTR    = 3'd3,
-        INIT_OP_CONTROL  = 3'd4,
-        INIT_OP_END      = 3'd7
+        INIT_OP_NOP        = 3'd0,
+        INIT_OP_PLAY_CFG   = 3'd1,
+        INIT_OP_MEAS_CFG   = 3'd2,
+        INIT_OP_INSTR      = 3'd3,
+        INIT_OP_CONTROL    = 3'd4,
+        INIT_OP_RESET_WAIT = 3'd5,
+        INIT_OP_END        = 3'd7
     } init_op_t;
 
     // ============================================================
@@ -55,14 +49,14 @@ package rtl_pkg;
 
     localparam int unsigned PlayCfgDepth = 8;
     localparam int unsigned MeasCfgDepth = 4;
-    localparam int unsigned InstrDepth   = 8;
+    localparam int unsigned InstrDepth   = 32;
 
     localparam int unsigned PlayCfgAw = (PlayCfgDepth <= 1) ? 1 : $clog2(PlayCfgDepth);
     localparam int unsigned MeasCfgAw = (MeasCfgDepth <= 1) ? 1 : $clog2(MeasCfgDepth);
     localparam int unsigned InstrAw   = (InstrDepth   <= 1) ? 1 : $clog2(InstrDepth);
 
     localparam bit LoadDefaultsAfterReset = 1'b1;
-    localparam int unsigned InitRomDepth  = 16;
+    localparam int unsigned InitRomDepth  = 32;
     localparam int unsigned InitRomAw     = (InitRomDepth <= 1) ? 1 : $clog2(InitRomDepth);
 
     // ============================================================
