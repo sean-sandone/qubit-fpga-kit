@@ -17,13 +17,17 @@ package rtl_pkg;
     } envelope_t;
 
     typedef enum logic [3:0] {
-        OP_NOP        = 4'd0,
-        OP_PLAY       = 4'd1,
-        OP_MEASURE    = 4'd2,
-        OP_WAIT       = 4'd3,
-        OP_END        = 4'd4,
-        OP_JUMP       = 4'd5,
-        OP_WAIT_RESET = 4'd6
+        OP_NOP         = 4'd0,
+        OP_PLAY        = 4'd1,
+        OP_MEASURE     = 4'd2,
+        OP_WAIT        = 4'd3,
+        OP_END         = 4'd4,
+        OP_JUMP        = 4'd5,
+        OP_WAIT_RESET  = 4'd6,
+        OP_ACCUM_CLEAR = 4'd7,
+        OP_ACCUM       = 4'd8,
+        OP_ACCUM_AVG   = 4'd9,
+        OP_LOOP        = 4'd10
     } opcode_t;
 
     typedef enum logic [1:0] {
@@ -84,10 +88,10 @@ package rtl_pkg;
     // ============================================================
 
     typedef struct packed {
-        opcode_t      opcode;
-        logic [3:0]   flags;
-        logic [3:0]   cfg_index;
-        logic [19:0]  operand;
+        opcode_t     opcode;
+        logic [3:0]  flags;
+        logic [3:0]  cfg_index;
+        logic [19:0] operand;
     } instr_t;
 
     // ============================================================

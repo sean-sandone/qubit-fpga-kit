@@ -32,6 +32,11 @@ module instr_sequencer (
 
     input  logic                          measure_rsp_done_pulse,
 
+    output logic                          cal_accum_clear,
+    output logic                          cal_accum_push,
+    output logic                          cal_accum_finalize,
+    input  logic                          cal_accum_done_pulse,
+
     output logic                          seq_busy,
     output logic                          seq_done_pulse
 );
@@ -48,7 +53,8 @@ module instr_sequencer (
         SeqStateWaitCycles      = 4'd6,
         SeqStateWaitMeasureRsp  = 4'd7,
         SeqStateDone            = 4'd8,
-        SeqStateStartReset      = 4'd9
+        SeqStateStartReset      = 4'd9,
+        SeqStateWaitAccumAvg    = 4'd10
     } seq_state_t;
 
     seq_state_t state_r;
@@ -59,6 +65,10 @@ module instr_sequencer (
     logic               started_r;
     logic               last_was_play_r;
     logic               last_was_reset_r;
+
+    logic               loop_active_r;
+    logic [11:0]        loop_count_r;
+    logic [InstrAw-1:0] loop_target_r;
 
     assign rd_instr_addr       = pc_r;
     assign rd_play_cfg_addr    = cfg_index_r[PlayCfgAw-1:0];
@@ -72,18 +82,27 @@ module instr_sequencer (
 
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
-            state_r          <= SeqStateIdle;
-            pc_r             <= '0;
-            cfg_index_r      <= '0;
-            wait_count_r     <= '0;
-            started_r        <= 1'b0;
-            last_was_play_r  <= 1'b0;
-            last_was_reset_r <= 1'b0;
-            formatter_start  <= 1'b0;
-            seq_done_pulse   <= 1'b0;
+            state_r            <= SeqStateIdle;
+            pc_r               <= '0;
+            cfg_index_r        <= '0;
+            wait_count_r       <= '0;
+            started_r          <= 1'b0;
+            last_was_play_r    <= 1'b0;
+            last_was_reset_r   <= 1'b0;
+            formatter_start    <= 1'b0;
+            cal_accum_clear    <= 1'b0;
+            cal_accum_push     <= 1'b0;
+            cal_accum_finalize <= 1'b0;
+            seq_done_pulse     <= 1'b0;
+            loop_active_r      <= 1'b0;
+            loop_count_r       <= '0;
+            loop_target_r      <= '0;
         end else begin
-            formatter_start <= 1'b0;
-            seq_done_pulse  <= 1'b0;
+            formatter_start    <= 1'b0;
+            cal_accum_clear    <= 1'b0;
+            cal_accum_push     <= 1'b0;
+            cal_accum_finalize <= 1'b0;
+            seq_done_pulse     <= 1'b0;
 
             case (state_r)
                 SeqStateIdle: begin
@@ -130,8 +149,9 @@ module instr_sequencer (
                         end
 
                         OP_JUMP: begin
-                            pc_r    <= rd_instr_data.operand[InstrAw-1:0];
-                            state_r <= SeqStateFetch;
+                            pc_r          <= rd_instr_data.operand[InstrAw-1:0];
+                            loop_active_r <= 1'b0;
+                            state_r       <= SeqStateFetch;
                         end
 
                         OP_WAIT_RESET: begin
@@ -139,6 +159,45 @@ module instr_sequencer (
                             last_was_play_r  <= 1'b0;
                             last_was_reset_r <= 1'b1;
                             state_r          <= SeqStateStartReset;
+                        end
+
+                        OP_ACCUM_CLEAR: begin
+                            cal_accum_clear <= 1'b1;
+                            pc_r            <= pc_r + 1'b1;
+                            state_r         <= SeqStateFetch;
+                        end
+
+                        OP_ACCUM: begin
+                            cal_accum_push <= 1'b1;
+                            pc_r           <= pc_r + 1'b1;
+                            state_r        <= SeqStateFetch;
+                        end
+
+                        OP_ACCUM_AVG: begin
+                            cal_accum_finalize <= 1'b1;
+                            state_r            <= SeqStateWaitAccumAvg;
+                        end
+
+                        OP_LOOP: begin
+                            if (!loop_active_r) begin
+                                if (rd_instr_data.operand[19:8] == 12'd0) begin
+                                    pc_r    <= pc_r + 1'b1;
+                                end else begin
+                                    loop_active_r <= 1'b1;
+                                    loop_count_r  <= rd_instr_data.operand[19:8];
+                                    loop_target_r <= rd_instr_data.operand[InstrAw-1:0];
+                                    pc_r          <= rd_instr_data.operand[InstrAw-1:0];
+                                end
+                            end else if (loop_count_r > 12'd1) begin
+                                loop_count_r <= loop_count_r - 1'b1;
+                                pc_r         <= loop_target_r;
+                            end else begin
+                                loop_active_r <= 1'b0;
+                                loop_count_r  <= '0;
+                                pc_r          <= pc_r + 1'b1;
+                            end
+
+                            state_r <= SeqStateFetch;
                         end
 
                         OP_END: begin
@@ -195,6 +254,13 @@ module instr_sequencer (
 
                 SeqStateWaitMeasureRsp: begin
                     if (measure_rsp_done_pulse) begin
+                        pc_r    <= pc_r + 1'b1;
+                        state_r <= SeqStateFetch;
+                    end
+                end
+
+                SeqStateWaitAccumAvg: begin
+                    if (cal_accum_done_pulse) begin
                         pc_r    <= pc_r + 1'b1;
                         state_r <= SeqStateFetch;
                     end

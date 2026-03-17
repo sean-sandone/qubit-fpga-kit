@@ -44,7 +44,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
     // ============================================================
     // Reset synchronizer
-    // CPU_RESET is active-high on the board button
+    // CPU_RESET is active-high on the board
     // Internal reset is active-low for the design
     // ============================================================
 
@@ -259,6 +259,11 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .wr_instr_addr         (init_wr_instr_addr),
         .wr_instr_data         (init_wr_instr_data),
 
+        .wr_cal_results        (cal_accum_done_pulse),
+        .cal_sample_count_in   (cal_accum_sample_count),
+        .cal_i_avg_in          (cal_accum_i_avg),
+        .cal_q_avg_in          (cal_accum_q_avg),
+
         .rd_instr_addr         (rd_instr_addr),
         .rd_instr_data         (rd_instr_data),
 
@@ -281,7 +286,11 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .instr_any_valid       (instr_any_valid),
 
         .seq_busy              (seq_busy),
-        .seq_done_sticky       (seq_done_sticky)
+        .seq_done_sticky       (seq_done_sticky),
+
+        .cal_sample_count      (),
+        .cal_i_avg             (),
+        .cal_q_avg             ()
     );
 
     // ============================================================
@@ -296,6 +305,20 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     measure_cfg_t         formatter_measure_cfg;
     logic                 formatter_busy;
     logic                 formatter_done_pulse;
+
+    // ============================================================
+    // Calibration accumulator
+    // ============================================================
+
+    logic        cal_accum_clear;
+    logic        cal_accum_push;
+    logic        cal_accum_finalize;
+    logic        cal_accum_busy;
+    logic        cal_accum_done_pulse;
+    logic        cal_accum_avg_valid;
+    logic [15:0] cal_accum_sample_count;
+    logic signed [15:0] cal_accum_i_avg;
+    logic signed [15:0] cal_accum_q_avg;
 
     // ============================================================
     // Formatter UART source
@@ -450,8 +473,36 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .measure_rsp_done_pulse(measure_rsp_done_pulse),
 
+        .cal_accum_clear       (cal_accum_clear),
+        .cal_accum_push        (cal_accum_push),
+        .cal_accum_finalize    (cal_accum_finalize),
+        .cal_accum_done_pulse  (cal_accum_done_pulse),
+
         .seq_busy              (seq_busy),
         .seq_done_pulse        (seq_done_pulse_in)
+    );
+
+    // ============================================================
+    // Calibration accumulator
+    // ============================================================
+
+    calibration_accumulator u_calibration_accumulator (
+        .clk          (clk),
+        .rst_sync_n   (rst_sync_n),
+
+        .clear        (cal_accum_clear),
+        .push         (cal_accum_push),
+        .finalize     (cal_accum_finalize),
+
+        .i_in         (measure_i_avg),
+        .q_in         (measure_q_avg),
+
+        .busy         (cal_accum_busy),
+        .done_pulse   (cal_accum_done_pulse),
+        .avg_valid    (cal_accum_avg_valid),
+        .sample_count (cal_accum_sample_count),
+        .i_avg        (cal_accum_i_avg),
+        .q_avg        (cal_accum_q_avg)
     );
 
     // ============================================================

@@ -49,6 +49,15 @@ module register_bank (
     input  rtl_pkg::instr_t               wr_instr_data,
 
     // ============================================================
+    // Calibration result write interface
+    // ============================================================
+
+    input  logic        wr_cal_results,
+    input  logic [15:0] cal_sample_count_in,
+    input  logic signed [15:0] cal_i_avg_in,
+    input  logic signed [15:0] cal_q_avg_in,
+
+    // ============================================================
     // Sequencer read interfaces
     // ============================================================
 
@@ -82,7 +91,11 @@ module register_bank (
     output logic instr_any_valid,
 
     output logic seq_busy,
-    output logic seq_done_sticky
+    output logic seq_done_sticky,
+
+    output logic [15:0] cal_sample_count,
+    output logic signed [15:0] cal_i_avg,
+    output logic signed [15:0] cal_q_avg
 );
 
     import rtl_pkg::*;
@@ -108,6 +121,10 @@ module register_bank (
     logic        seq_done_sticky_r;
     logic [31:0] reset_wait_cycles_r;
 
+    logic [15:0]         cal_sample_count_r;
+    logic signed [15:0]  cal_i_avg_r;
+    logic signed [15:0]  cal_q_avg_r;
+
     // ============================================================
     // Read data registers
     // ============================================================
@@ -128,6 +145,9 @@ module register_bank (
             soft_reset_req_r    <= 1'b0;
             seq_done_sticky_r   <= 1'b0;
             reset_wait_cycles_r <= 32'd0;
+            cal_sample_count_r  <= 16'd0;
+            cal_i_avg_r         <= '0;
+            cal_q_avg_r         <= '0;
 
             for (i = 0; i < PlayCfgDepth; i = i + 1) begin
                 play_cfg_mem_r[i]   <= '0;
@@ -180,6 +200,12 @@ module register_bank (
                 instr_valid_r[wr_instr_addr] <= 1'b1;
             end
 
+            if (wr_cal_results) begin
+                cal_sample_count_r <= cal_sample_count_in;
+                cal_i_avg_r        <= cal_i_avg_in;
+                cal_q_avg_r        <= cal_q_avg_in;
+            end
+
             if (seq_done_pulse_in) begin
                 seq_done_sticky_r <= 1'b1;
             end
@@ -216,5 +242,9 @@ module register_bank (
 
     assign seq_busy        = seq_busy_in;
     assign seq_done_sticky = seq_done_sticky_r;
+
+    assign cal_sample_count = cal_sample_count_r;
+    assign cal_i_avg        = cal_i_avg_r;
+    assign cal_q_avg        = cal_q_avg_r;
 
 endmodule
