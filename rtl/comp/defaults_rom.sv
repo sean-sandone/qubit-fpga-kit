@@ -45,12 +45,12 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Play config 1
+            // Play config 1 - candidate stronger |1> prep pulse
             // ============================================================
 
             1: begin
-                play_cfg_v.amp_q8_8    = 16'h0080; // 0.5
-                play_cfg_v.phase_q8_8  = 16'h0100; // placeholder
+                play_cfg_v.amp_q8_8    = 16'h0330; // 3.1875 - intentionally strong for testing
+                play_cfg_v.phase_q8_8  = 16'h0000;
                 play_cfg_v.duration_ns = 32'd200;
                 play_cfg_v.sigma_ns    = 32'd30;
                 play_cfg_v.pad_ns      = 32'd200;
@@ -63,10 +63,28 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Measure config 0
+            // Play config 2
             // ============================================================
 
             2: begin
+                play_cfg_v.amp_q8_8    = 16'h0080; // 0.5
+                play_cfg_v.phase_q8_8  = 16'h0100; // placeholder
+                play_cfg_v.duration_ns = 32'd200;
+                play_cfg_v.sigma_ns    = 32'd30;
+                play_cfg_v.pad_ns      = 32'd200;
+                play_cfg_v.detune_hz   = 32'd0;
+                play_cfg_v.envelope    = ENV_GAUSS;
+
+                rom_word_r.op      = INIT_OP_PLAY_CFG;
+                rom_word_r.addr    = 8'd2;
+                rom_word_r.payload = InitPayloadWidth'(play_cfg_v);
+            end
+
+            // ============================================================
+            // Measure config 0
+            // ============================================================
+
+            3: begin
                 meas_cfg_v.n_readout  = 16'd64;
                 meas_cfg_v.readout_ns = 32'd1024;
                 meas_cfg_v.ringup_ns  = 32'd512;
@@ -77,10 +95,24 @@ module defaults_rom (
             end
 
             // ============================================================
+            // Measure config 1
+            // ============================================================
+
+            4: begin
+                meas_cfg_v.n_readout  = 16'd64;
+                meas_cfg_v.readout_ns = 32'd1024;
+                meas_cfg_v.ringup_ns  = 32'd256; // shorter ringup
+
+                rom_word_r.op      = INIT_OP_MEAS_CFG;
+                rom_word_r.addr    = 8'd1;
+                rom_word_r.payload = InitPayloadWidth'(meas_cfg_v);
+            end
+
+            // ============================================================
             // Default reset-wait register preload
             // ============================================================
 
-            3: begin
+            5: begin
                 rom_word_r.op            = INIT_OP_RESET_WAIT;
                 rom_word_r.addr          = 8'd0;
                 rom_word_r.payload[31:0] = 32'd1000;
@@ -90,7 +122,7 @@ module defaults_rom (
             // Instr 0: WAIT_RESET for |0> calibration shot 0
             // ============================================================
 
-            4: begin
+            6: begin
                 instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -105,7 +137,7 @@ module defaults_rom (
             // Instr 1: MEASURE cfg 0 for |0> calibration shot 0
             // ============================================================
 
-            5: begin
+            7: begin
                 instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -120,7 +152,7 @@ module defaults_rom (
             // Instr 2: WAIT_RESET for |0> calibration shot 1
             // ============================================================
 
-            6: begin
+            8: begin
                 instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -135,7 +167,7 @@ module defaults_rom (
             // Instr 3: MEASURE cfg 0 for |0> calibration shot 1
             // ============================================================
 
-            7: begin
+            9: begin
                 instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -150,7 +182,7 @@ module defaults_rom (
             // Instr 4: WAIT_RESET for |0> calibration shot 2
             // ============================================================
 
-            8: begin
+            10: begin
                 instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -165,7 +197,7 @@ module defaults_rom (
             // Instr 5: MEASURE cfg 0 for |0> calibration shot 2
             // ============================================================
 
-            9: begin
+            11: begin
                 instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -180,7 +212,7 @@ module defaults_rom (
             // Instr 6: WAIT_RESET for |1> calibration shot 0
             // ============================================================
 
-            10: begin
+            12: begin
                 instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -195,7 +227,7 @@ module defaults_rom (
             // Instr 7: PLAY cfg 1 for |1> calibration shot 0
             // ============================================================
 
-            11: begin
+            13: begin
                 instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd1;
@@ -207,13 +239,13 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 8: MEASURE cfg 0 for |1> calibration shot 0
+            // Instr 8: MEASURE cfg 1 for |1> calibration shot 0
             // ============================================================
 
-            12: begin
+            14: begin
                 instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
-                instr_v.cfg_index = 4'd0;
+                instr_v.cfg_index = 4'd1;
                 instr_v.operand   = 20'd0;
 
                 rom_word_r.op      = INIT_OP_INSTR;
@@ -225,7 +257,7 @@ module defaults_rom (
             // Instr 9: WAIT_RESET for |1> calibration shot 1
             // ============================================================
 
-            13: begin
+            15: begin
                 instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -240,7 +272,7 @@ module defaults_rom (
             // Instr 10: PLAY cfg 1 for |1> calibration shot 1
             // ============================================================
 
-            14: begin
+            16: begin
                 instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd1;
@@ -252,13 +284,13 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 11: MEASURE cfg 0 for |1> calibration shot 1
+            // Instr 11: MEASURE cfg 1 for |1> calibration shot 1
             // ============================================================
 
-            15: begin
+            17: begin
                 instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
-                instr_v.cfg_index = 4'd0;
+                instr_v.cfg_index = 4'd1;
                 instr_v.operand   = 20'd0;
 
                 rom_word_r.op      = INIT_OP_INSTR;
@@ -270,7 +302,7 @@ module defaults_rom (
             // Instr 12: WAIT_RESET for |1> calibration shot 2
             // ============================================================
 
-            16: begin
+            18: begin
                 instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -285,7 +317,7 @@ module defaults_rom (
             // Instr 13: PLAY cfg 1 for |1> calibration shot 2
             // ============================================================
 
-            17: begin
+            19: begin
                 instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd1;
@@ -297,13 +329,13 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 14: MEASURE cfg 0 for |1> calibration shot 2
+            // Instr 14: MEASURE cfg 1 for |1> calibration shot 2
             // ============================================================
 
-            18: begin
+            20: begin
                 instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
-                instr_v.cfg_index = 4'd0;
+                instr_v.cfg_index = 4'd1;
                 instr_v.operand   = 20'd0;
 
                 rom_word_r.op      = INIT_OP_INSTR;
@@ -312,10 +344,10 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 15: WAIT_RESET before existing sequence
+            // Instr 15: WAIT_RESET before test sequence
             // ============================================================
 
-            19: begin
+            21: begin
                 instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -330,7 +362,7 @@ module defaults_rom (
             // Instr 16: PLAY cfg 0
             // ============================================================
 
-            20: begin
+            22: begin
                 instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -345,7 +377,7 @@ module defaults_rom (
             // Instr 17: WAIT 100
             // ============================================================
 
-            21: begin
+            23: begin
                 instr_v.opcode    = OP_WAIT;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -357,13 +389,13 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 18: PLAY cfg 1
+            // Instr 18: PLAY cfg 2
             // ============================================================
 
-            22: begin
+            24: begin
                 instr_v.opcode    = OP_PLAY;
                 instr_v.flags     = 4'd0;
-                instr_v.cfg_index = 4'd1;
+                instr_v.cfg_index = 4'd2;
                 instr_v.operand   = 20'd0;
 
                 rom_word_r.op      = INIT_OP_INSTR;
@@ -375,7 +407,7 @@ module defaults_rom (
             // Instr 19: MEASURE cfg 0
             // ============================================================
 
-            23: begin
+            25: begin
                 instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -390,7 +422,7 @@ module defaults_rom (
             // Instr 20: END
             // ============================================================
 
-            24: begin
+            26: begin
                 instr_v.opcode    = OP_END;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
@@ -405,7 +437,7 @@ module defaults_rom (
             // End of init stream
             // ============================================================
 
-            25: begin
+            27: begin
                 rom_word_r.op      = INIT_OP_END;
                 rom_word_r.addr    = 8'd0;
                 rom_word_r.payload = '0;
