@@ -87,11 +87,11 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 0: PLAY cfg 0
+            // Instr 0: WAIT_RESET for |0> calibration shot 0
             // ============================================================
 
             4: begin
-                instr_v.opcode    = OP_PLAY;
+                instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
                 instr_v.operand   = 20'd0;
@@ -102,14 +102,14 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 1: WAIT 100
+            // Instr 1: MEASURE cfg 0 for |0> calibration shot 0
             // ============================================================
 
             5: begin
-                instr_v.opcode    = OP_WAIT;
+                instr_v.opcode    = OP_MEASURE;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
-                instr_v.operand   = 20'd100;
+                instr_v.operand   = 20'd0;
 
                 rom_word_r.op      = INIT_OP_INSTR;
                 rom_word_r.addr    = 8'd1;
@@ -117,13 +117,13 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 2: PLAY cfg 1
+            // Instr 2: WAIT_RESET for |0> calibration shot 1
             // ============================================================
 
             6: begin
-                instr_v.opcode    = OP_PLAY;
+                instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
-                instr_v.cfg_index = 4'd1;
+                instr_v.cfg_index = 4'd0;
                 instr_v.operand   = 20'd0;
 
                 rom_word_r.op      = INIT_OP_INSTR;
@@ -132,7 +132,7 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 3: MEASURE cfg 0
+            // Instr 3: MEASURE cfg 0 for |0> calibration shot 1
             // ============================================================
 
             7: begin
@@ -147,11 +147,11 @@ module defaults_rom (
             end
 
             // ============================================================
-            // Instr 4: END
+            // Instr 4: WAIT_RESET for |0> calibration shot 2
             // ============================================================
 
             8: begin
-                instr_v.opcode    = OP_END;
+                instr_v.opcode    = OP_WAIT_RESET;
                 instr_v.flags     = 4'd0;
                 instr_v.cfg_index = 4'd0;
                 instr_v.operand   = 20'd0;
@@ -162,10 +162,250 @@ module defaults_rom (
             end
 
             // ============================================================
-            // End of init stream
+            // Instr 5: MEASURE cfg 0 for |0> calibration shot 2
             // ============================================================
 
             9: begin
+                instr_v.opcode    = OP_MEASURE;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd5;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 6: WAIT_RESET for |1> calibration shot 0
+            // ============================================================
+
+            10: begin
+                instr_v.opcode    = OP_WAIT_RESET;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd6;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 7: PLAY cfg 1 for |1> calibration shot 0
+            // ============================================================
+
+            11: begin
+                instr_v.opcode    = OP_PLAY;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd1;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd7;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 8: MEASURE cfg 0 for |1> calibration shot 0
+            // ============================================================
+
+            12: begin
+                instr_v.opcode    = OP_MEASURE;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd8;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 9: WAIT_RESET for |1> calibration shot 1
+            // ============================================================
+
+            13: begin
+                instr_v.opcode    = OP_WAIT_RESET;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd9;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 10: PLAY cfg 1 for |1> calibration shot 1
+            // ============================================================
+
+            14: begin
+                instr_v.opcode    = OP_PLAY;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd1;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd10;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 11: MEASURE cfg 0 for |1> calibration shot 1
+            // ============================================================
+
+            15: begin
+                instr_v.opcode    = OP_MEASURE;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd11;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 12: WAIT_RESET for |1> calibration shot 2
+            // ============================================================
+
+            16: begin
+                instr_v.opcode    = OP_WAIT_RESET;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd12;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 13: PLAY cfg 1 for |1> calibration shot 2
+            // ============================================================
+
+            17: begin
+                instr_v.opcode    = OP_PLAY;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd1;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd13;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 14: MEASURE cfg 0 for |1> calibration shot 2
+            // ============================================================
+
+            18: begin
+                instr_v.opcode    = OP_MEASURE;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd14;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 15: WAIT_RESET before existing sequence
+            // ============================================================
+
+            19: begin
+                instr_v.opcode    = OP_WAIT_RESET;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd15;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 16: PLAY cfg 0
+            // ============================================================
+
+            20: begin
+                instr_v.opcode    = OP_PLAY;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd16;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 17: WAIT 100
+            // ============================================================
+
+            21: begin
+                instr_v.opcode    = OP_WAIT;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd100;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd17;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 18: PLAY cfg 1
+            // ============================================================
+
+            22: begin
+                instr_v.opcode    = OP_PLAY;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd1;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd18;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 19: MEASURE cfg 0
+            // ============================================================
+
+            23: begin
+                instr_v.opcode    = OP_MEASURE;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd19;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // Instr 20: END
+            // ============================================================
+
+            24: begin
+                instr_v.opcode    = OP_END;
+                instr_v.flags     = 4'd0;
+                instr_v.cfg_index = 4'd0;
+                instr_v.operand   = 20'd0;
+
+                rom_word_r.op      = INIT_OP_INSTR;
+                rom_word_r.addr    = 8'd20;
+                rom_word_r.payload = InitPayloadWidth'(instr_v);
+            end
+
+            // ============================================================
+            // End of init stream
+            // ============================================================
+
+            25: begin
                 rom_word_r.op      = INIT_OP_END;
                 rom_word_r.addr    = 8'd0;
                 rom_word_r.payload = '0;

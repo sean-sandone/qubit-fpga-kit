@@ -49,14 +49,14 @@ package rtl_pkg;
 
     localparam int unsigned PlayCfgDepth = 8;
     localparam int unsigned MeasCfgDepth = 4;
-    localparam int unsigned InstrDepth   = 8;
+    localparam int unsigned InstrDepth   = 32;
 
     localparam int unsigned PlayCfgAw = (PlayCfgDepth <= 1) ? 1 : $clog2(PlayCfgDepth);
     localparam int unsigned MeasCfgAw = (MeasCfgDepth <= 1) ? 1 : $clog2(MeasCfgDepth);
     localparam int unsigned InstrAw   = (InstrDepth   <= 1) ? 1 : $clog2(InstrDepth);
 
     localparam bit LoadDefaultsAfterReset = 1'b1;
-    localparam int unsigned InitRomDepth  = 16;
+    localparam int unsigned InitRomDepth  = 32;
     localparam int unsigned InitRomAw     = (InitRomDepth <= 1) ? 1 : $clog2(InitRomDepth);
 
     // ============================================================
