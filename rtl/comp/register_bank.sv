@@ -107,7 +107,9 @@ module register_bank (
 
     output logic cal_i0q0_valid,
     output logic cal_i1q1_valid,
-    output logic cal_threshold_valid
+    output logic cal_threshold_valid,
+
+    output logic cal_debug_update_pulse
 );
 
     import rtl_pkg::*;
@@ -147,6 +149,7 @@ module register_bank (
     logic reg_cal_i0q0_valid_r;
     logic reg_cal_i1q1_valid_r;
     logic reg_cal_threshold_valid_r;
+    logic cal_debug_update_pulse_r;
 
     // ============================================================
     // Read data registers
@@ -183,6 +186,7 @@ module register_bank (
             reg_cal_i0q0_valid_r      <= 1'b0;
             reg_cal_i1q1_valid_r      <= 1'b0;
             reg_cal_threshold_valid_r <= 1'b0;
+            cal_debug_update_pulse_r  <= 1'b0;
 
             for (i = 0; i < PlayCfgDepth; i = i + 1) begin
                 play_cfg_mem_r[i]   <= '0;
@@ -199,7 +203,8 @@ module register_bank (
                 instr_valid_r[i] <= 1'b0;
             end
         end else begin
-            soft_reset_req_r <= 1'b0;
+            soft_reset_req_r         <= 1'b0;
+            cal_debug_update_pulse_r <= 1'b0;
 
             if (wr_control) begin
                 if (control_start_exp_in) begin
@@ -245,23 +250,33 @@ module register_bank (
                         reg_cal_i0_ref_r     <= cal_i_avg_in;
                         reg_cal_q0_ref_r     <= cal_q_avg_in;
                         reg_cal_i0q0_valid_r <= 1'b1;
+
+                        if (reg_cal_i1q1_valid_r) begin
+                            reg_cal_i_threshold_r     <= (cal_i_avg_in + reg_cal_i1_ref_r) >>> 1;
+                            reg_cal_state_polarity_r  <= (reg_cal_i1_ref_r >= cal_i_avg_in);
+                            reg_cal_threshold_valid_r <= 1'b1;
+                        end
+
+                        cal_debug_update_pulse_r <= 1'b1;
                     end
 
                     CAL_DEST_REF1: begin
                         reg_cal_i1_ref_r     <= cal_i_avg_in;
                         reg_cal_q1_ref_r     <= cal_q_avg_in;
                         reg_cal_i1q1_valid_r <= 1'b1;
+
+                        if (reg_cal_i0q0_valid_r) begin
+                            reg_cal_i_threshold_r     <= (reg_cal_i0_ref_r + cal_i_avg_in) >>> 1;
+                            reg_cal_state_polarity_r  <= (cal_i_avg_in >= reg_cal_i0_ref_r);
+                            reg_cal_threshold_valid_r <= 1'b1;
+                        end
+
+                        cal_debug_update_pulse_r <= 1'b1;
                     end
 
                     default: begin
                     end
                 endcase
-            end
-
-            if (reg_cal_i0q0_valid_r && reg_cal_i1q1_valid_r) begin
-                reg_cal_i_threshold_r     <= (reg_cal_i0_ref_r + reg_cal_i1_ref_r) >>> 1;
-                reg_cal_state_polarity_r  <= (reg_cal_i1_ref_r >= reg_cal_i0_ref_r);
-                reg_cal_threshold_valid_r <= 1'b1;
             end
 
             if (seq_done_pulse_in) begin
@@ -315,5 +330,7 @@ module register_bank (
     assign cal_i0q0_valid      = reg_cal_i0q0_valid_r;
     assign cal_i1q1_valid      = reg_cal_i1q1_valid_r;
     assign cal_threshold_valid = reg_cal_threshold_valid_r;
+
+    assign cal_debug_update_pulse = cal_debug_update_pulse_r;
 
 endmodule

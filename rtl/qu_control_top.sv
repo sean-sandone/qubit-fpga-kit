@@ -259,6 +259,8 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic reg_cal_i0q0_valid;
     logic reg_cal_i1q1_valid;
     logic reg_cal_threshold_valid;
+    logic reg_cal_debug_update_pulse;
+    logic cal_debug_ref0_sel_r;
 
     assign clear_start_exp = 1'b0;
 
@@ -332,7 +334,9 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .cal_i0q0_valid        (reg_cal_i0q0_valid),
         .cal_i1q1_valid        (reg_cal_i1q1_valid),
-        .cal_threshold_valid   (reg_cal_threshold_valid)
+        .cal_threshold_valid   (reg_cal_threshold_valid),
+
+        .cal_debug_update_pulse(reg_cal_debug_update_pulse)
     );
 
     // ============================================================
@@ -371,13 +375,17 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // Debug UART source
     // ============================================================
 
-    logic       debug_start;
-    logic       debug_busy;
-    logic       debug_done_pulse;
-    logic [7:0] debug_tx_data;
-    logic       debug_tx_valid;
-    logic       debug_tx_ready;
-    logic       debug_pending_r;
+    logic               debug_start;
+    logic               debug_cal_update;
+    logic [7:0]         debug_tx_data;
+    logic               debug_tx_valid;
+    logic               debug_tx_ready;
+    logic               debug_busy;
+    logic               debug_done_pulse;
+    logic               debug_pending_r;
+    logic               debug_pending_is_cal_r;
+    logic signed [15:0] debug_i_avg_sel;
+    logic signed [15:0] debug_q_avg_sel;
 
     // ============================================================
     // Message-atomic UART TX arbitration
@@ -430,17 +438,54 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
-            debug_pending_r <= 1'b0;
+            debug_pending_r        <= 1'b0;
+            debug_pending_is_cal_r <= 1'b0;
         end else begin
-            if (measure_rsp_done_pulse) begin
-                debug_pending_r <= 1'b1;
+            if (reg_cal_debug_update_pulse) begin
+                debug_pending_r        <= 1'b1;
+                debug_pending_is_cal_r <= 1'b1;
+            end else if (measure_rsp_done_pulse) begin
+                debug_pending_r        <= 1'b1;
+                debug_pending_is_cal_r <= 1'b0;
             end else if (debug_start) begin
-                debug_pending_r <= 1'b0;
+                debug_pending_r        <= 1'b0;
+                debug_pending_is_cal_r <= 1'b0;
             end
         end
     end
 
-    assign debug_start = debug_pending_r && (tx_owner_r == TxOwnerNone);
+    always_ff @(posedge clk) begin
+        if (!rst_sync_n) begin
+            cal_debug_ref0_sel_r <= 1'b0;
+        end else begin
+            if (cal_accum_done_pulse) begin
+                case (cal_accum_store_sel)
+                    CAL_DEST_REF0: cal_debug_ref0_sel_r <= 1'b1;
+                    CAL_DEST_REF1: cal_debug_ref0_sel_r <= 1'b0;
+                    default: begin
+                    end
+                endcase
+            end
+        end
+    end
+
+    assign debug_start      = debug_pending_r && (tx_owner_r == TxOwnerNone);
+    assign debug_cal_update = debug_pending_is_cal_r;
+
+    always_comb begin
+        if (debug_cal_update) begin
+            if (cal_debug_ref0_sel_r) begin
+                debug_i_avg_sel = reg_cal_i0_ref;
+                debug_q_avg_sel = reg_cal_q0_ref;
+            end else begin
+                debug_i_avg_sel = reg_cal_i1_ref;
+                debug_q_avg_sel = reg_cal_q1_ref;
+            end
+        end else begin
+            debug_i_avg_sel = measure_i_avg;
+            debug_q_avg_sel = measure_q_avg;
+        end
+    end
 
     // ============================================================
     // UART TX routing by locked owner
@@ -512,6 +557,29 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     );
 
     // ============================================================
+    // Calibration accumulator
+    // ============================================================
+
+    calibration_accumulator u_calibration_accumulator (
+        .clk          (clk),
+        .rst_sync_n   (rst_sync_n),
+
+        .clear        (cal_accum_clear),
+        .push         (cal_accum_push),
+        .finalize     (cal_accum_finalize),
+
+        .i_in         (measure_i_avg),
+        .q_in         (measure_q_avg),
+
+        .busy         (cal_accum_busy),
+        .done_pulse   (cal_accum_done_pulse),
+        .avg_valid    (cal_accum_avg_valid),
+        .sample_count (cal_accum_sample_count),
+        .i_avg        (cal_accum_i_avg),
+        .q_avg        (cal_accum_q_avg)
+    );
+
+    // ============================================================
     // Command formatter
     // ============================================================
 
@@ -555,46 +623,26 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     );
 
     // ============================================================
-    // Calibration accumulator
-    // ============================================================
-
-    calibration_accumulator u_calibration_accumulator (
-        .clk          (clk),
-        .rst_sync_n   (rst_sync_n),
-
-        .clear        (cal_accum_clear),
-        .push         (cal_accum_push),
-        .finalize     (cal_accum_finalize),
-
-        .i_in         (measure_i_avg),
-        .q_in         (measure_q_avg),
-
-        .busy         (cal_accum_busy),
-        .done_pulse   (cal_accum_done_pulse),
-        .avg_valid    (cal_accum_avg_valid),
-        .sample_count (cal_accum_sample_count),
-        .i_avg        (cal_accum_i_avg),
-        .q_avg        (cal_accum_q_avg)
-    );
-
-    // ============================================================
     // Debug formatter
     // ============================================================
 
     debug u_debug (
-        .clk        (clk),
-        .rst_sync_n (rst_sync_n),
+        .clk                (clk),
+        .rst_sync_n         (rst_sync_n),
 
-        .start      (debug_start),
-        .i_avg      (measure_i_avg),
-        .q_avg      (measure_q_avg),
+        .start              (debug_start),
+        .cal_update         (debug_cal_update),
+        .i_avg              (debug_i_avg_sel),
+        .q_avg              (debug_q_avg_sel),
+        .cal_i_threshold    (reg_cal_i_threshold),
+        .cal_state_polarity (reg_cal_state_polarity),
 
-        .tx_data    (debug_tx_data),
-        .tx_valid   (debug_tx_valid),
-        .tx_ready   (debug_tx_ready),
+        .tx_data            (debug_tx_data),
+        .tx_valid           (debug_tx_valid),
+        .tx_ready           (debug_tx_ready),
 
-        .busy       (debug_busy),
-        .done_pulse (debug_done_pulse)
+        .busy               (debug_busy),
+        .done_pulse         (debug_done_pulse)
     );
 
 endmodule
