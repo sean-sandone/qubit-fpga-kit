@@ -259,10 +259,16 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic reg_cal_i0q0_valid;
     logic reg_cal_i1q1_valid;
     logic reg_cal_threshold_valid;
+    logic reg_meas_state;
+    logic reg_meas_state_valid;
     logic reg_cal_debug_update_pulse;
     logic cal_debug_ref0_sel_r;
 
-    assign clear_start_exp = 1'b0;
+    logic clear_meas_state_valid;
+    logic measure_start;
+
+    assign clear_start_exp       = 1'b0;
+    assign clear_meas_state_valid = measure_start;
 
     // ============================================================
     // Register bank
@@ -296,6 +302,10 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .cal_sample_count_in   (cal_accum_sample_count),
         .cal_i_avg_in          (cal_accum_i_avg),
         .cal_q_avg_in          (cal_accum_q_avg),
+
+        .clear_meas_state_valid(clear_meas_state_valid),
+        .wr_meas_state         (measure_rsp_done_pulse),
+        .meas_i_avg_in         (measure_i_avg),
 
         .rd_instr_addr         (rd_instr_addr),
         .rd_instr_data         (rd_instr_data),
@@ -335,6 +345,9 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .cal_i0q0_valid        (reg_cal_i0q0_valid),
         .cal_i1q1_valid        (reg_cal_i1q1_valid),
         .cal_threshold_valid   (reg_cal_threshold_valid),
+
+        .meas_state            (reg_meas_state),
+        .meas_state_valid      (reg_meas_state_valid),
 
         .cal_debug_update_pulse(reg_cal_debug_update_pulse)
     );
@@ -544,6 +557,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .formatter_busy        (formatter_busy),
         .formatter_done_pulse  (formatter_done_pulse),
 
+        .measure_start         (measure_start),
         .measure_rsp_done_pulse(measure_rsp_done_pulse),
 
         .cal_accum_clear       (cal_accum_clear),
