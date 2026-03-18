@@ -230,6 +230,36 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic seq_done_pulse_in;
     logic clear_start_exp;
 
+    // ============================================================
+    // Calibration results / registers
+    // ============================================================
+
+    logic        cal_accum_clear;
+    logic        cal_accum_push;
+    logic        cal_accum_finalize;
+    logic [1:0]  cal_accum_store_sel;
+    logic        cal_accum_busy;
+    logic        cal_accum_done_pulse;
+    logic        cal_accum_avg_valid;
+    logic [15:0] cal_accum_sample_count;
+    logic signed [15:0] cal_accum_i_avg;
+    logic signed [15:0] cal_accum_q_avg;
+
+    logic [15:0]        reg_cal_sample_count;
+    logic signed [15:0] reg_cal_i_avg;
+    logic signed [15:0] reg_cal_q_avg;
+
+    logic signed [15:0] reg_cal_i0_ref;
+    logic signed [15:0] reg_cal_q0_ref;
+    logic signed [15:0] reg_cal_i1_ref;
+    logic signed [15:0] reg_cal_q1_ref;
+    logic signed [15:0] reg_cal_i_threshold;
+    logic               reg_cal_state_polarity;
+
+    logic reg_cal_i0q0_valid;
+    logic reg_cal_i1q1_valid;
+    logic reg_cal_threshold_valid;
+
     assign clear_start_exp = 1'b0;
 
     // ============================================================
@@ -260,6 +290,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .wr_instr_data         (init_wr_instr_data),
 
         .wr_cal_results        (cal_accum_done_pulse),
+        .cal_store_sel_in      (cal_accum_store_sel),
         .cal_sample_count_in   (cal_accum_sample_count),
         .cal_i_avg_in          (cal_accum_i_avg),
         .cal_q_avg_in          (cal_accum_q_avg),
@@ -288,9 +319,20 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .seq_busy              (seq_busy),
         .seq_done_sticky       (seq_done_sticky),
 
-        .cal_sample_count      (),
-        .cal_i_avg             (),
-        .cal_q_avg             ()
+        .cal_sample_count      (reg_cal_sample_count),
+        .cal_i_avg             (reg_cal_i_avg),
+        .cal_q_avg             (reg_cal_q_avg),
+
+        .cal_i0_ref            (reg_cal_i0_ref),
+        .cal_q0_ref            (reg_cal_q0_ref),
+        .cal_i1_ref            (reg_cal_i1_ref),
+        .cal_q1_ref            (reg_cal_q1_ref),
+        .cal_i_threshold       (reg_cal_i_threshold),
+        .cal_state_polarity    (reg_cal_state_polarity),
+
+        .cal_i0q0_valid        (reg_cal_i0q0_valid),
+        .cal_i1q1_valid        (reg_cal_i1q1_valid),
+        .cal_threshold_valid   (reg_cal_threshold_valid)
     );
 
     // ============================================================
@@ -305,20 +347,6 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     measure_cfg_t         formatter_measure_cfg;
     logic                 formatter_busy;
     logic                 formatter_done_pulse;
-
-    // ============================================================
-    // Calibration accumulator
-    // ============================================================
-
-    logic        cal_accum_clear;
-    logic        cal_accum_push;
-    logic        cal_accum_finalize;
-    logic        cal_accum_busy;
-    logic        cal_accum_done_pulse;
-    logic        cal_accum_avg_valid;
-    logic [15:0] cal_accum_sample_count;
-    logic signed [15:0] cal_accum_i_avg;
-    logic signed [15:0] cal_accum_q_avg;
 
     // ============================================================
     // Formatter UART source
@@ -343,13 +371,13 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // Debug UART source
     // ============================================================
 
-    logic        debug_start;
-    logic [7:0]  debug_tx_data;
-    logic        debug_tx_valid;
-    logic        debug_tx_ready;
-    logic        debug_busy;
-    logic        debug_done_pulse;
-    logic        debug_pending_r;
+    logic       debug_start;
+    logic       debug_busy;
+    logic       debug_done_pulse;
+    logic [7:0] debug_tx_data;
+    logic       debug_tx_valid;
+    logic       debug_tx_ready;
+    logic       debug_pending_r;
 
     // ============================================================
     // Message-atomic UART TX arbitration
@@ -476,33 +504,11 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .cal_accum_clear       (cal_accum_clear),
         .cal_accum_push        (cal_accum_push),
         .cal_accum_finalize    (cal_accum_finalize),
+        .cal_accum_store_sel   (cal_accum_store_sel),
         .cal_accum_done_pulse  (cal_accum_done_pulse),
 
         .seq_busy              (seq_busy),
         .seq_done_pulse        (seq_done_pulse_in)
-    );
-
-    // ============================================================
-    // Calibration accumulator
-    // ============================================================
-
-    calibration_accumulator u_calibration_accumulator (
-        .clk          (clk),
-        .rst_sync_n   (rst_sync_n),
-
-        .clear        (cal_accum_clear),
-        .push         (cal_accum_push),
-        .finalize     (cal_accum_finalize),
-
-        .i_in         (measure_i_avg),
-        .q_in         (measure_q_avg),
-
-        .busy         (cal_accum_busy),
-        .done_pulse   (cal_accum_done_pulse),
-        .avg_valid    (cal_accum_avg_valid),
-        .sample_count (cal_accum_sample_count),
-        .i_avg        (cal_accum_i_avg),
-        .q_avg        (cal_accum_q_avg)
     );
 
     // ============================================================
@@ -546,6 +552,29 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .sample_count  (measure_rsp_sample_count),
         .i_avg         (measure_i_avg),
         .q_avg         (measure_q_avg)
+    );
+
+    // ============================================================
+    // Calibration accumulator
+    // ============================================================
+
+    calibration_accumulator u_calibration_accumulator (
+        .clk          (clk),
+        .rst_sync_n   (rst_sync_n),
+
+        .clear        (cal_accum_clear),
+        .push         (cal_accum_push),
+        .finalize     (cal_accum_finalize),
+
+        .i_in         (measure_i_avg),
+        .q_in         (measure_q_avg),
+
+        .busy         (cal_accum_busy),
+        .done_pulse   (cal_accum_done_pulse),
+        .avg_valid    (cal_accum_avg_valid),
+        .sample_count (cal_accum_sample_count),
+        .i_avg        (cal_accum_i_avg),
+        .q_avg        (cal_accum_q_avg)
     );
 
     // ============================================================

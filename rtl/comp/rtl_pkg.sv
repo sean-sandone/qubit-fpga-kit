@@ -47,6 +47,12 @@ package rtl_pkg;
         INIT_OP_END        = 3'd7
     } init_op_t;
 
+    typedef enum logic [1:0] {
+        CAL_DEST_TEMP = 2'd0,
+        CAL_DEST_REF0 = 2'd1,
+        CAL_DEST_REF1 = 2'd2
+    } cal_store_dest_t;
+
     // ============================================================
     // Memory sizing
     // ============================================================
