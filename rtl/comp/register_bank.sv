@@ -49,6 +49,16 @@ module register_bank (
     input  rtl_pkg::instr_t               wr_instr_data,
 
     // ============================================================
+    // Calibration result write interface
+    // ============================================================
+
+    input  logic        wr_cal_results,
+    input  logic [1:0]  cal_store_sel_in,
+    input  logic [15:0] cal_sample_count_in,
+    input  logic signed [15:0] cal_i_avg_in,
+    input  logic signed [15:0] cal_q_avg_in,
+
+    // ============================================================
     // Sequencer read interfaces
     // ============================================================
 
@@ -82,7 +92,24 @@ module register_bank (
     output logic instr_any_valid,
 
     output logic seq_busy,
-    output logic seq_done_sticky
+    output logic seq_done_sticky,
+
+    output logic [15:0]        cal_sample_count,
+    output logic signed [15:0] cal_i_avg,
+    output logic signed [15:0] cal_q_avg,
+
+    output logic signed [15:0] cal_i0_ref,
+    output logic signed [15:0] cal_q0_ref,
+    output logic signed [15:0] cal_i1_ref,
+    output logic signed [15:0] cal_q1_ref,
+    output logic signed [15:0] cal_i_threshold,
+    output logic               cal_state_polarity,
+
+    output logic cal_i0q0_valid,
+    output logic cal_i1q1_valid,
+    output logic cal_threshold_valid,
+
+    output logic cal_debug_update_pulse
 );
 
     import rtl_pkg::*;
@@ -108,6 +135,22 @@ module register_bank (
     logic        seq_done_sticky_r;
     logic [31:0] reset_wait_cycles_r;
 
+    logic [15:0]        cal_sample_count_r;
+    logic signed [15:0] cal_i_avg_r;
+    logic signed [15:0] cal_q_avg_r;
+
+    logic signed [15:0] reg_cal_i0_ref_r;
+    logic signed [15:0] reg_cal_q0_ref_r;
+    logic signed [15:0] reg_cal_i1_ref_r;
+    logic signed [15:0] reg_cal_q1_ref_r;
+    logic signed [15:0] reg_cal_i_threshold_r;
+    logic               reg_cal_state_polarity_r;
+
+    logic reg_cal_i0q0_valid_r;
+    logic reg_cal_i1q1_valid_r;
+    logic reg_cal_threshold_valid_r;
+    logic cal_debug_update_pulse_r;
+
     // ============================================================
     // Read data registers
     // ============================================================
@@ -124,10 +167,26 @@ module register_bank (
 
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
-            start_exp_r         <= 1'b0;
-            soft_reset_req_r    <= 1'b0;
-            seq_done_sticky_r   <= 1'b0;
-            reset_wait_cycles_r <= 32'd0;
+            start_exp_r               <= 1'b0;
+            soft_reset_req_r          <= 1'b0;
+            seq_done_sticky_r         <= 1'b0;
+            reset_wait_cycles_r       <= 32'd0;
+
+            cal_sample_count_r        <= 16'd0;
+            cal_i_avg_r               <= '0;
+            cal_q_avg_r               <= '0;
+
+            reg_cal_i0_ref_r          <= '0;
+            reg_cal_q0_ref_r          <= '0;
+            reg_cal_i1_ref_r          <= '0;
+            reg_cal_q1_ref_r          <= '0;
+            reg_cal_i_threshold_r     <= '0;
+            reg_cal_state_polarity_r  <= 1'b0;
+
+            reg_cal_i0q0_valid_r      <= 1'b0;
+            reg_cal_i1q1_valid_r      <= 1'b0;
+            reg_cal_threshold_valid_r <= 1'b0;
+            cal_debug_update_pulse_r  <= 1'b0;
 
             for (i = 0; i < PlayCfgDepth; i = i + 1) begin
                 play_cfg_mem_r[i]   <= '0;
@@ -144,7 +203,8 @@ module register_bank (
                 instr_valid_r[i] <= 1'b0;
             end
         end else begin
-            soft_reset_req_r <= 1'b0;
+            soft_reset_req_r         <= 1'b0;
+            cal_debug_update_pulse_r <= 1'b0;
 
             if (wr_control) begin
                 if (control_start_exp_in) begin
@@ -178,6 +238,45 @@ module register_bank (
             if (wr_instr) begin
                 instr_mem_r[wr_instr_addr]   <= wr_instr_data;
                 instr_valid_r[wr_instr_addr] <= 1'b1;
+            end
+
+            if (wr_cal_results) begin
+                cal_sample_count_r <= cal_sample_count_in;
+                cal_i_avg_r        <= cal_i_avg_in;
+                cal_q_avg_r        <= cal_q_avg_in;
+
+                unique case (cal_store_sel_in)
+                    CAL_DEST_REF0: begin
+                        reg_cal_i0_ref_r     <= cal_i_avg_in;
+                        reg_cal_q0_ref_r     <= cal_q_avg_in;
+                        reg_cal_i0q0_valid_r <= 1'b1;
+
+                        if (reg_cal_i1q1_valid_r) begin
+                            reg_cal_i_threshold_r     <= (cal_i_avg_in + reg_cal_i1_ref_r) >>> 1;
+                            reg_cal_state_polarity_r  <= (reg_cal_i1_ref_r >= cal_i_avg_in);
+                            reg_cal_threshold_valid_r <= 1'b1;
+                        end
+
+                        cal_debug_update_pulse_r <= 1'b1;
+                    end
+
+                    CAL_DEST_REF1: begin
+                        reg_cal_i1_ref_r     <= cal_i_avg_in;
+                        reg_cal_q1_ref_r     <= cal_q_avg_in;
+                        reg_cal_i1q1_valid_r <= 1'b1;
+
+                        if (reg_cal_i0q0_valid_r) begin
+                            reg_cal_i_threshold_r     <= (reg_cal_i0_ref_r + cal_i_avg_in) >>> 1;
+                            reg_cal_state_polarity_r  <= (cal_i_avg_in >= reg_cal_i0_ref_r);
+                            reg_cal_threshold_valid_r <= 1'b1;
+                        end
+
+                        cal_debug_update_pulse_r <= 1'b1;
+                    end
+
+                    default: begin
+                    end
+                endcase
             end
 
             if (seq_done_pulse_in) begin
@@ -216,5 +315,22 @@ module register_bank (
 
     assign seq_busy        = seq_busy_in;
     assign seq_done_sticky = seq_done_sticky_r;
+
+    assign cal_sample_count = cal_sample_count_r;
+    assign cal_i_avg        = cal_i_avg_r;
+    assign cal_q_avg        = cal_q_avg_r;
+
+    assign cal_i0_ref         = reg_cal_i0_ref_r;
+    assign cal_q0_ref         = reg_cal_q0_ref_r;
+    assign cal_i1_ref         = reg_cal_i1_ref_r;
+    assign cal_q1_ref         = reg_cal_q1_ref_r;
+    assign cal_i_threshold    = reg_cal_i_threshold_r;
+    assign cal_state_polarity = reg_cal_state_polarity_r;
+
+    assign cal_i0q0_valid      = reg_cal_i0q0_valid_r;
+    assign cal_i1q1_valid      = reg_cal_i1q1_valid_r;
+    assign cal_threshold_valid = reg_cal_threshold_valid_r;
+
+    assign cal_debug_update_pulse = cal_debug_update_pulse_r;
 
 endmodule

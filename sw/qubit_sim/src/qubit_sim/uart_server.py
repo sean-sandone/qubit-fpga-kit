@@ -147,18 +147,39 @@ def _format_debug_measure_info(obj: Dict[str, Any]) -> str:
     i_avg_dec = _q2_14_i16_to_float(i_avg_raw)
     q_avg_dec = _q2_14_i16_to_float(q_avg_raw)
 
-    if msg:
-        return (
-            'DEBUG '
-            f'{{"msg":"{msg}","I_avg_q2_14":{i_avg_raw},"Q_avg_q2_14":{q_avg_raw},'
-            f'"I_avg":{i_avg_dec:.6f},"Q_avg":{q_avg_dec:.6f}}}'
-        )
+    cal_i_threshold_present = "cal_i_threshold" in obj
+    cal_state_polarity_present = "cal_state_polarity" in obj
 
-    return (
-        'DEBUG '
-        f'{{"I_avg_q2_14":{i_avg_raw},"Q_avg_q2_14":{q_avg_raw},'
-        f'"I_avg":{i_avg_dec:.6f},"Q_avg":{q_avg_dec:.6f}}}'
-    )
+    if cal_i_threshold_present:
+        cal_i_threshold_raw = _parse_int_like(obj.get("cal_i_threshold", 0))
+        cal_i_threshold_dec = _q2_14_i16_to_float(cal_i_threshold_raw)
+    else:
+        cal_i_threshold_raw = 0
+        cal_i_threshold_dec = 0.0
+
+    if cal_state_polarity_present:
+        cal_state_polarity = 1 if _parse_int_like(obj.get("cal_state_polarity", 0)) != 0 else 0
+    else:
+        cal_state_polarity = 0
+
+    fields = []
+
+    if msg:
+        fields.append(f'"msg":"{msg}"')
+
+    fields.append(f'"I_avg_q2_14":{i_avg_raw}')
+    fields.append(f'"Q_avg_q2_14":{q_avg_raw}')
+    fields.append(f'"I_avg":{i_avg_dec:.6f}')
+    fields.append(f'"Q_avg":{q_avg_dec:.6f}')
+
+    if cal_i_threshold_present:
+        fields.append(f'"cal_i_threshold_q2_14":{cal_i_threshold_raw}')
+        fields.append(f'"cal_i_threshold":{cal_i_threshold_dec:.6f}')
+
+    if cal_state_polarity_present:
+        fields.append(f'"cal_state_polarity":{cal_state_polarity}')
+
+    return "DEBUG {" + ",".join(fields) + "}"
 
 
 def _decode_play(obj: Dict[str, Any]) -> Dict[str, Any]:
@@ -609,4 +630,3 @@ if __name__ == "__main__":
         debug=args.debug,
         log_file=args.log_file,
     )
-    
