@@ -30,6 +30,7 @@ module instr_sequencer (
     input  logic                          formatter_busy,
     input  logic                          formatter_done_pulse,
 
+    output logic                          measure_start,
     input  logic                          measure_rsp_done_pulse,
 
     output logic                          cal_accum_clear,
@@ -94,6 +95,7 @@ module instr_sequencer (
             last_was_play_r       <= 1'b0;
             last_was_reset_r      <= 1'b0;
             formatter_start       <= 1'b0;
+            measure_start         <= 1'b0;
             cal_accum_clear       <= 1'b0;
             cal_accum_push        <= 1'b0;
             cal_accum_finalize    <= 1'b0;
@@ -104,6 +106,7 @@ module instr_sequencer (
             loop_target_r         <= '0;
         end else begin
             formatter_start    <= 1'b0;
+            measure_start      <= 1'b0;
             cal_accum_clear    <= 1'b0;
             cal_accum_push     <= 1'b0;
             cal_accum_finalize <= 1'b0;
@@ -228,6 +231,7 @@ module instr_sequencer (
                 SeqStateStartMeasure: begin
                     if (!formatter_busy) begin
                         formatter_start <= 1'b1;
+                        measure_start   <= 1'b1;
                         state_r         <= SeqStateWaitFormat;
                     end
                 end

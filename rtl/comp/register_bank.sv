@@ -59,6 +59,14 @@ module register_bank (
     input  logic signed [15:0] cal_q_avg_in,
 
     // ============================================================
+    // Measurement state update interface
+    // ============================================================
+
+    input  logic        clear_meas_state_valid,
+    input  logic        wr_meas_state,
+    input  logic signed [15:0] meas_i_avg_in,
+
+    // ============================================================
     // Sequencer read interfaces
     // ============================================================
 
@@ -109,6 +117,9 @@ module register_bank (
     output logic cal_i1q1_valid,
     output logic cal_threshold_valid,
 
+    output logic meas_state,
+    output logic meas_state_valid,
+
     output logic cal_debug_update_pulse
 );
 
@@ -149,6 +160,8 @@ module register_bank (
     logic reg_cal_i0q0_valid_r;
     logic reg_cal_i1q1_valid_r;
     logic reg_cal_threshold_valid_r;
+    logic reg_meas_state_r;
+    logic reg_meas_state_valid_r;
     logic cal_debug_update_pulse_r;
 
     // ============================================================
@@ -186,6 +199,8 @@ module register_bank (
             reg_cal_i0q0_valid_r      <= 1'b0;
             reg_cal_i1q1_valid_r      <= 1'b0;
             reg_cal_threshold_valid_r <= 1'b0;
+            reg_meas_state_r          <= 1'b0;
+            reg_meas_state_valid_r    <= 1'b0;
             cal_debug_update_pulse_r  <= 1'b0;
 
             for (i = 0; i < PlayCfgDepth; i = i + 1) begin
@@ -238,6 +253,24 @@ module register_bank (
             if (wr_instr) begin
                 instr_mem_r[wr_instr_addr]   <= wr_instr_data;
                 instr_valid_r[wr_instr_addr] <= 1'b1;
+            end
+
+            if (clear_meas_state_valid) begin
+                reg_meas_state_valid_r <= 1'b0;
+            end
+
+            if (wr_meas_state) begin
+                if (reg_cal_threshold_valid_r) begin
+                    if (reg_cal_state_polarity_r) begin
+                        reg_meas_state_r <= (meas_i_avg_in >= reg_cal_i_threshold_r);
+                    end else begin
+                        reg_meas_state_r <= (meas_i_avg_in < reg_cal_i_threshold_r);
+                    end
+
+                    reg_meas_state_valid_r <= 1'b1;
+                end else begin
+                    reg_meas_state_valid_r <= 1'b0;
+                end
             end
 
             if (wr_cal_results) begin
@@ -330,6 +363,9 @@ module register_bank (
     assign cal_i0q0_valid      = reg_cal_i0q0_valid_r;
     assign cal_i1q1_valid      = reg_cal_i1q1_valid_r;
     assign cal_threshold_valid = reg_cal_threshold_valid_r;
+
+    assign meas_state       = reg_meas_state_r;
+    assign meas_state_valid = reg_meas_state_valid_r;
 
     assign cal_debug_update_pulse = cal_debug_update_pulse_r;
 

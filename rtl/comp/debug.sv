@@ -15,6 +15,8 @@ module debug (
     input  logic signed [15:0] q_avg,
     input  logic signed [15:0] cal_i_threshold,
     input  logic               cal_state_polarity,
+    input  logic               meas_state,
+    input  logic               meas_state_valid,
 
     output logic [7:0] tx_data,
     output logic       tx_valid,
@@ -36,9 +38,11 @@ module debug (
         DbgStateBuildThresh  = 4'd6,
         DbgStateBuildMid2    = 4'd7,
         DbgStateBuildPol     = 4'd8,
-        DbgStateBuildSuffix0 = 4'd9,
-        DbgStateSend         = 4'd10,
-        DbgStateDone         = 4'd11
+        DbgStateBuildMid3    = 4'd9,
+        DbgStateBuildMeas    = 4'd10,
+        DbgStateBuildSuffix0 = 4'd11,
+        DbgStateSend         = 4'd12,
+        DbgStateDone         = 4'd13
     } dbg_state_t;
 
     typedef enum logic [1:0] {
@@ -54,6 +58,8 @@ module debug (
     logic signed [15:0] q_avg_r;
     logic signed [15:0] cal_i_threshold_r;
     logic               cal_state_polarity_r;
+    logic               meas_state_r;
+    logic               meas_state_valid_r;
 
     logic [7:0] msg_buf_r [MsgBufLen];
     logic [6:0] msg_len_r;
@@ -284,6 +290,25 @@ module debug (
         endcase
     endfunction
 
+    function automatic logic [7:0] mid3_char(input logic [6:0] idx);
+        case (idx)
+            7'd0:  mid3_char = ",";
+            7'd1:  mid3_char = "\"";
+            7'd2:  mid3_char = "m";
+            7'd3:  mid3_char = "e";
+            7'd4:  mid3_char = "a";
+            7'd5:  mid3_char = "s";
+            7'd6:  mid3_char = "_";
+            7'd7:  mid3_char = "s";
+            7'd8:  mid3_char = "t";
+            7'd9:  mid3_char = "a";
+            7'd10: mid3_char = "t";
+            7'd11: mid3_char = "e";
+            7'd12: mid3_char = "\"";
+            default: mid3_char = ":";
+        endcase
+    endfunction
+
     function automatic logic [7:0] suffix_char(input logic [6:0] idx);
         case (idx)
             7'd0: suffix_char = "}";
@@ -302,6 +327,8 @@ module debug (
             q_avg_r                <= '0;
             cal_i_threshold_r      <= '0;
             cal_state_polarity_r   <= 1'b0;
+            meas_state_r           <= 1'b0;
+            meas_state_valid_r     <= 1'b0;
             msg_len_r              <= '0;
             msg_wr_idx_r           <= '0;
             msg_tx_idx_r           <= '0;
@@ -323,6 +350,8 @@ module debug (
                         q_avg_r              <= q_avg;
                         cal_i_threshold_r    <= cal_i_threshold;
                         cal_state_polarity_r <= cal_state_polarity;
+                        meas_state_r         <= meas_state;
+                        meas_state_valid_r   <= meas_state_valid;
                         msg_len_r            <= '0;
                         msg_wr_idx_r         <= '0;
                         msg_tx_idx_r         <= '0;
@@ -443,7 +472,7 @@ module debug (
                                     state_r    <= DbgStateBuildMid1;
                                 end else begin
                                     text_idx_r <= '0;
-                                    state_r    <= DbgStateBuildSuffix0;
+                                    state_r    <= DbgStateBuildMid3;
                                 end
                             end else begin
                                 digit_emit_idx_r <= digit_emit_idx_r - 1'b1;
@@ -531,6 +560,45 @@ module debug (
                     msg_len_r               <= msg_len_r + 1'b1;
                     text_idx_r              <= '0;
                     state_r                 <= DbgStateBuildSuffix0;
+                end
+
+                DbgStateBuildMid3: begin
+                    msg_buf_r[msg_wr_idx_r] <= mid3_char(text_idx_r);
+                    msg_wr_idx_r            <= msg_wr_idx_r + 1'b1;
+                    msg_len_r               <= msg_len_r + 1'b1;
+
+                    if (text_idx_r == 7'd13) begin
+                        text_idx_r <= '0;
+                        state_r    <= DbgStateBuildMeas;
+                    end else begin
+                        text_idx_r <= text_idx_r + 1'b1;
+                    end
+                end
+
+                DbgStateBuildMeas: begin
+                    if (meas_state_valid_r) begin
+                        msg_buf_r[msg_wr_idx_r] <= meas_state_r ? "1" : "0";
+                        msg_wr_idx_r            <= msg_wr_idx_r + 1'b1;
+                        msg_len_r               <= msg_len_r + 1'b1;
+                        text_idx_r              <= '0;
+                        state_r                 <= DbgStateBuildSuffix0;
+                    end else begin
+                        case (text_idx_r)
+                            7'd0: msg_buf_r[msg_wr_idx_r] <= "\"";
+                            7'd1: msg_buf_r[msg_wr_idx_r] <= "n";
+                            7'd2: msg_buf_r[msg_wr_idx_r] <= "a";
+                            default: msg_buf_r[msg_wr_idx_r] <= "\"";
+                        endcase
+                        msg_wr_idx_r <= msg_wr_idx_r + 1'b1;
+                        msg_len_r    <= msg_len_r + 1'b1;
+
+                        if (text_idx_r == 7'd3) begin
+                            text_idx_r <= '0;
+                            state_r    <= DbgStateBuildSuffix0;
+                        end else begin
+                            text_idx_r <= text_idx_r + 1'b1;
+                        end
+                    end
                 end
 
                 DbgStateBuildSuffix0: begin
