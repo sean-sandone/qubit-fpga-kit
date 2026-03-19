@@ -650,6 +650,8 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .q_avg              (debug_q_avg_sel),
         .cal_i_threshold    (reg_cal_i_threshold),
         .cal_state_polarity (reg_cal_state_polarity),
+        .meas_state         (reg_meas_state),
+        .meas_state_valid   (reg_meas_state_valid),
 
         .tx_data            (debug_tx_data),
         .tx_valid           (debug_tx_valid),
