@@ -5,7 +5,7 @@
 // WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
 //------------------------------------------------------------------------------
 
-module uart_frontend #(
+module uart_wrapper #(
     parameter int CLK_FREQ_HZ = 125_000_000,
     parameter int BAUD_RATE   = 115200
 )(
