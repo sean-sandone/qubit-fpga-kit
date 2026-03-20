@@ -1,7 +1,9 @@
 //------------------------------------------------------------------------------
 // PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
 //------------------------------------------------------------------------------
-// AUTHORS: Sean Sandone
+// Copyright (C) 2026 Sean Sandone
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Please see the LICENSE file for details.
 // WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
 //------------------------------------------------------------------------------
 
@@ -52,6 +54,15 @@ package rtl_pkg;
         CAL_DEST_REF0 = 2'd1,
         CAL_DEST_REF1 = 2'd2
     } cal_store_dest_t;
+
+    typedef enum logic [2:0] {
+        REG_WR_KIND_NONE        = 3'd0,
+        REG_WR_KIND_CONTROL     = 3'd1,
+        REG_WR_KIND_RESET_WAIT  = 3'd2,
+        REG_WR_KIND_PLAY_CFG    = 3'd3,
+        REG_WR_KIND_MEASURE_CFG = 3'd4,
+        REG_WR_KIND_INSTR       = 3'd5
+    } reg_wr_kind_t;
 
     // ============================================================
     // Memory sizing
@@ -123,6 +134,21 @@ package rtl_pkg;
     localparam int unsigned MeasureSampleWidth = 16;
     localparam int unsigned MeasureAccumWidth  = 32;
     localparam int unsigned Q2_14FracBits      = 14;
+
+    // ============================================================
+    // UART register write packet constants
+    // ============================================================
+
+    localparam logic [7:0] RegWrSync0          = 8'hC3;
+    localparam logic [7:0] RegWrSync1          = 8'h3C;
+    localparam logic [7:0] RegWrTypeControl    = 8'h10;
+    localparam logic [7:0] RegWrTypeResetWait  = 8'h11;
+    localparam logic [7:0] RegWrTypePlayCfg    = 8'h12;
+    localparam logic [7:0] RegWrTypeMeasureCfg = 8'h13;
+    localparam logic [7:0] RegWrTypeInstr      = 8'h14;
+
+    localparam int unsigned RegWrControlBitStartExp  = 0;
+    localparam int unsigned RegWrControlBitSoftReset = 1;
 
     // ============================================================
     // Legacy demo constant

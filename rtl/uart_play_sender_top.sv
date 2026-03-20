@@ -1,5 +1,11 @@
-// uart_play_sender_top.sv
-
+//------------------------------------------------------------------------------
+// PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
+//------------------------------------------------------------------------------
+// Copyright (C) 2026 Sean Sandone
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Please see the LICENSE file for details.
+// WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
+//------------------------------------------------------------------------------
 
 module uart_play_sender_top #(  //KCU105
     parameter int CLK_FREQ_HZ = 125_000_000,

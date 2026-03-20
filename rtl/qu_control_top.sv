@@ -1,7 +1,9 @@
 //------------------------------------------------------------------------------
 // PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
 //------------------------------------------------------------------------------
-// AUTHORS: Sean Sandone
+// Copyright (C) 2026 Sean Sandone
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Please see the LICENSE file for details.
 // WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
 //------------------------------------------------------------------------------
 
@@ -87,10 +89,10 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // UART frontend
     // ============================================================
 
-    uart_frontend #(
+    uart_wrapper #(
         .CLK_FREQ_HZ(CLK_FREQ_HZ),
         .BAUD_RATE  (BAUD_RATE)
-    ) u_uart_frontend (
+    ) u_uart_wrapper (
         .clk             (clk),
         .rst_sync        (rst_sync),
         .rst_sync_n      (rst_sync_n),
@@ -162,6 +164,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     instr_t               init_wr_instr_data;
 
     logic                 init_active;
+    logic                 init_done_pulse;
     logic                 init_done;
 
     defaults_rom u_defaults_rom (
@@ -196,6 +199,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .wr_instr_data         (init_wr_instr_data),
 
         .init_active           (init_active),
+        .init_done_pulse       (init_done_pulse),
         .init_done             (init_done)
     );
 
@@ -230,6 +234,10 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic seq_done_pulse_in;
     logic clear_start_exp;
 
+    logic start_sequencer;
+
+    assign start_sequencer = start_exp | init_done_pulse;
+
     // ============================================================
     // Calibration results / registers
     // ============================================================
@@ -262,13 +270,51 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic reg_meas_state;
     logic reg_meas_state_valid;
     logic reg_cal_debug_update_pulse;
-    logic cal_debug_ref0_sel_r;
+    logic reg_cal_debug_ref0_sel;
 
     logic clear_meas_state_valid;
     logic measure_start;
 
-    assign clear_start_exp       = 1'b0;
     assign clear_meas_state_valid = measure_start;
+    assign clear_start_exp = seq_busy;
+
+
+
+    // ============================================================
+    // Register write arbitration
+    // ============================================================
+
+    logic                 arb_wr_control;
+    logic                 arb_control_start_exp;
+    logic                 arb_control_soft_reset;
+
+    logic                 arb_wr_reset_wait_cycles;
+    logic [31:0]          arb_wr_reset_wait_cycles_data;
+
+    logic                 arb_wr_play_cfg;
+    logic [PlayCfgAw-1:0] arb_wr_play_cfg_addr;
+    play_cfg_t            arb_wr_play_cfg_data;
+
+    logic                 arb_wr_measure_cfg;
+    logic [MeasCfgAw-1:0] arb_wr_measure_cfg_addr;
+    measure_cfg_t         arb_wr_measure_cfg_data;
+
+    logic                 arb_wr_instr;
+    logic [InstrAw-1:0]   arb_wr_instr_addr;
+    instr_t               arb_wr_instr_data;
+
+    logic                 uart_reg_wr_req_valid;
+    logic                 uart_reg_wr_req_accept;
+    reg_wr_kind_t         uart_reg_wr_req_kind;
+    logic                 uart_reg_wr_control_start_exp;
+    logic                 uart_reg_wr_control_soft_reset;
+    logic [31:0]          uart_reg_wr_reset_wait_cycles_data;
+    logic [PlayCfgAw-1:0] uart_reg_wr_play_cfg_addr;
+    play_cfg_t            uart_reg_wr_play_cfg_data;
+    logic [MeasCfgAw-1:0] uart_reg_wr_measure_cfg_addr;
+    measure_cfg_t         uart_reg_wr_measure_cfg_data;
+    logic [InstrAw-1:0]   uart_reg_wr_instr_addr;
+    instr_t               uart_reg_wr_instr_data;
 
     // ============================================================
     // Register bank
@@ -278,24 +324,24 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .clk                   (clk),
         .rst_sync_n            (rst_sync_n),
 
-        .wr_control            (init_wr_control),
-        .control_start_exp_in  (init_control_start_exp),
-        .control_soft_reset_in (init_control_soft_reset),
+        .wr_control            (arb_wr_control),
+        .control_start_exp_in  (arb_control_start_exp),
+        .control_soft_reset_in (arb_control_soft_reset),
 
-        .wr_reset_wait_cycles      (init_wr_reset_wait_cycles),
-        .wr_reset_wait_cycles_data (init_wr_reset_wait_cycles_data),
+        .wr_reset_wait_cycles      (arb_wr_reset_wait_cycles),
+        .wr_reset_wait_cycles_data (arb_wr_reset_wait_cycles_data),
 
-        .wr_play_cfg           (init_wr_play_cfg),
-        .wr_play_cfg_addr      (init_wr_play_cfg_addr),
-        .wr_play_cfg_data      (init_wr_play_cfg_data),
+        .wr_play_cfg           (arb_wr_play_cfg),
+        .wr_play_cfg_addr      (arb_wr_play_cfg_addr),
+        .wr_play_cfg_data      (arb_wr_play_cfg_data),
 
-        .wr_measure_cfg        (init_wr_measure_cfg),
-        .wr_measure_cfg_addr   (init_wr_measure_cfg_addr),
-        .wr_measure_cfg_data   (init_wr_measure_cfg_data),
+        .wr_measure_cfg        (arb_wr_measure_cfg),
+        .wr_measure_cfg_addr   (arb_wr_measure_cfg_addr),
+        .wr_measure_cfg_data   (arb_wr_measure_cfg_data),
 
-        .wr_instr              (init_wr_instr),
-        .wr_instr_addr         (init_wr_instr_addr),
-        .wr_instr_data         (init_wr_instr_data),
+        .wr_instr              (arb_wr_instr),
+        .wr_instr_addr         (arb_wr_instr_addr),
+        .wr_instr_data         (arb_wr_instr_data),
 
         .wr_cal_results        (cal_accum_done_pulse),
         .cal_store_sel_in      (cal_accum_store_sel),
@@ -349,7 +395,102 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .meas_state            (reg_meas_state),
         .meas_state_valid      (reg_meas_state_valid),
 
-        .cal_debug_update_pulse(reg_cal_debug_update_pulse)
+        .cal_debug_update_pulse(reg_cal_debug_update_pulse),
+        .cal_debug_ref0_sel    (reg_cal_debug_ref0_sel)
+    );
+
+    // ============================================================
+    // UART register write receiver
+    // ============================================================
+
+    write_reg_rx u_write_reg_rx (
+        .clk                    (clk),
+        .rst_sync_n             (rst_sync_n),
+        .enable                 (init_done),
+
+        .rx_byte_valid          (uart_dout_vld),
+        .rx_byte                (uart_dout),
+
+        .req_valid              (uart_reg_wr_req_valid),
+        .req_accept             (uart_reg_wr_req_accept),
+        .req_kind               (uart_reg_wr_req_kind),
+
+        .control_start_exp      (uart_reg_wr_control_start_exp),
+        .control_soft_reset     (uart_reg_wr_control_soft_reset),
+        .reset_wait_cycles_data (uart_reg_wr_reset_wait_cycles_data),
+
+        .play_cfg_addr          (uart_reg_wr_play_cfg_addr),
+        .play_cfg_data          (uart_reg_wr_play_cfg_data),
+
+        .measure_cfg_addr       (uart_reg_wr_measure_cfg_addr),
+        .measure_cfg_data       (uart_reg_wr_measure_cfg_data),
+
+        .instr_addr             (uart_reg_wr_instr_addr),
+        .instr_data             (uart_reg_wr_instr_data)
+    );
+
+    // ============================================================
+    // Register write arbitration
+    // ============================================================
+
+    write_reg_arbiter u_write_reg_arbiter (
+        .clk                         (clk),
+        .rst_sync_n                  (rst_sync_n),
+
+        .init_wr_control             (init_wr_control),
+        .init_control_start_exp      (init_control_start_exp),
+        .init_control_soft_reset     (init_control_soft_reset),
+
+        .init_wr_reset_wait_cycles   (init_wr_reset_wait_cycles),
+        .init_wr_reset_wait_cycles_data(init_wr_reset_wait_cycles_data),
+
+        .init_wr_play_cfg            (init_wr_play_cfg),
+        .init_wr_play_cfg_addr       (init_wr_play_cfg_addr),
+        .init_wr_play_cfg_data       (init_wr_play_cfg_data),
+
+        .init_wr_measure_cfg         (init_wr_measure_cfg),
+        .init_wr_measure_cfg_addr    (init_wr_measure_cfg_addr),
+        .init_wr_measure_cfg_data    (init_wr_measure_cfg_data),
+
+        .init_wr_instr               (init_wr_instr),
+        .init_wr_instr_addr          (init_wr_instr_addr),
+        .init_wr_instr_data          (init_wr_instr_data),
+
+        .uart_req_valid              (uart_reg_wr_req_valid),
+        .uart_req_accept             (uart_reg_wr_req_accept),
+        .uart_req_kind               (uart_reg_wr_req_kind),
+
+        .uart_control_start_exp      (uart_reg_wr_control_start_exp),
+        .uart_control_soft_reset     (uart_reg_wr_control_soft_reset),
+        .uart_reset_wait_cycles_data (uart_reg_wr_reset_wait_cycles_data),
+
+        .uart_play_cfg_addr          (uart_reg_wr_play_cfg_addr),
+        .uart_play_cfg_data          (uart_reg_wr_play_cfg_data),
+
+        .uart_measure_cfg_addr       (uart_reg_wr_measure_cfg_addr),
+        .uart_measure_cfg_data       (uart_reg_wr_measure_cfg_data),
+
+        .uart_instr_addr             (uart_reg_wr_instr_addr),
+        .uart_instr_data             (uart_reg_wr_instr_data),
+
+        .arb_wr_control              (arb_wr_control),
+        .arb_control_start_exp       (arb_control_start_exp),
+        .arb_control_soft_reset      (arb_control_soft_reset),
+
+        .arb_wr_reset_wait_cycles    (arb_wr_reset_wait_cycles),
+        .arb_wr_reset_wait_cycles_data(arb_wr_reset_wait_cycles_data),
+
+        .arb_wr_play_cfg             (arb_wr_play_cfg),
+        .arb_wr_play_cfg_addr        (arb_wr_play_cfg_addr),
+        .arb_wr_play_cfg_data        (arb_wr_play_cfg_data),
+
+        .arb_wr_measure_cfg          (arb_wr_measure_cfg),
+        .arb_wr_measure_cfg_addr     (arb_wr_measure_cfg_addr),
+        .arb_wr_measure_cfg_data     (arb_wr_measure_cfg_data),
+
+        .arb_wr_instr                (arb_wr_instr),
+        .arb_wr_instr_addr           (arb_wr_instr_addr),
+        .arb_wr_instr_data           (arb_wr_instr_data)
     );
 
     // ============================================================
@@ -389,144 +530,70 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // ============================================================
 
     logic               debug_start;
-    logic               debug_cal_update;
     logic [7:0]         debug_tx_data;
     logic               debug_tx_valid;
     logic               debug_tx_ready;
     logic               debug_busy;
     logic               debug_done_pulse;
-    logic               debug_pending_r;
-    logic               debug_pending_is_cal_r;
+    logic               debug_pending;
+    logic               debug_pending_is_cal;
     logic signed [15:0] debug_i_avg_sel;
     logic signed [15:0] debug_q_avg_sel;
 
     // ============================================================
-    // Message-atomic UART TX arbitration
-    // One source owns the UART until its full message is complete
-    // ============================================================
-
-    typedef enum logic [1:0] {
-        TxOwnerNone      = 2'd0,
-        TxOwnerFormatter = 2'd1,
-        TxOwnerDebug     = 2'd2
-    } tx_owner_t;
-
-    tx_owner_t tx_owner_r;
-
-    always_ff @(posedge clk) begin
-        if (!rst_sync_n) begin
-            tx_owner_r <= TxOwnerNone;
-        end else begin
-            case (tx_owner_r)
-                TxOwnerNone: begin
-                    if (formatter_busy) begin
-                        tx_owner_r <= TxOwnerFormatter;
-                    end else if (debug_busy) begin
-                        tx_owner_r <= TxOwnerDebug;
-                    end
-                end
-
-                TxOwnerFormatter: begin
-                    if (formatter_done_pulse) begin
-                        tx_owner_r <= TxOwnerNone;
-                    end
-                end
-
-                TxOwnerDebug: begin
-                    if (debug_done_pulse) begin
-                        tx_owner_r <= TxOwnerNone;
-                    end
-                end
-
-                default: begin
-                    tx_owner_r <= TxOwnerNone;
-                end
-            endcase
-        end
-    end
-
-    // ============================================================
     // Latch debug requests until UART ownership is available
+    // Mux between calibration data and measurement data for debug
     // ============================================================
 
-    always_ff @(posedge clk) begin
-        if (!rst_sync_n) begin
-            debug_pending_r        <= 1'b0;
-            debug_pending_is_cal_r <= 1'b0;
-        end else begin
-            if (reg_cal_debug_update_pulse) begin
-                debug_pending_r        <= 1'b1;
-                debug_pending_is_cal_r <= 1'b1;
-            end else if (measure_rsp_done_pulse) begin
-                debug_pending_r        <= 1'b1;
-                debug_pending_is_cal_r <= 1'b0;
-            end else if (debug_start) begin
-                debug_pending_r        <= 1'b0;
-                debug_pending_is_cal_r <= 1'b0;
-            end
-        end
-    end
+    debug_ctrl u_debug_ctrl (
+        .clk                        (clk),
+        .rst_sync_n                 (rst_sync_n),
+        .reg_cal_debug_update_pulse (reg_cal_debug_update_pulse),
+        .measure_rsp_done_pulse     (measure_rsp_done_pulse),
+        .debug_start                (debug_start),
 
-    always_ff @(posedge clk) begin
-        if (!rst_sync_n) begin
-            cal_debug_ref0_sel_r <= 1'b0;
-        end else begin
-            if (cal_accum_done_pulse) begin
-                case (cal_accum_store_sel)
-                    CAL_DEST_REF0: cal_debug_ref0_sel_r <= 1'b1;
-                    CAL_DEST_REF1: cal_debug_ref0_sel_r <= 1'b0;
-                    default: begin
-                    end
-                endcase
-            end
-        end
-    end
+        .cal_debug_ref0_sel         (reg_cal_debug_ref0_sel),
 
-    assign debug_start      = debug_pending_r && (tx_owner_r == TxOwnerNone);
-    assign debug_cal_update = debug_pending_is_cal_r;
+        .reg_cal_i0_ref             (reg_cal_i0_ref),
+        .reg_cal_q0_ref             (reg_cal_q0_ref),
+        .reg_cal_i1_ref             (reg_cal_i1_ref),
+        .reg_cal_q1_ref             (reg_cal_q1_ref),
+        .measure_i_avg              (measure_i_avg),
+        .measure_q_avg              (measure_q_avg),
 
-    always_comb begin
-        if (debug_cal_update) begin
-            if (cal_debug_ref0_sel_r) begin
-                debug_i_avg_sel = reg_cal_i0_ref;
-                debug_q_avg_sel = reg_cal_q0_ref;
-            end else begin
-                debug_i_avg_sel = reg_cal_i1_ref;
-                debug_q_avg_sel = reg_cal_q1_ref;
-            end
-        end else begin
-            debug_i_avg_sel = measure_i_avg;
-            debug_q_avg_sel = measure_q_avg;
-        end
-    end
+        .debug_pending              (debug_pending),
+        .debug_pending_is_cal       (debug_pending_is_cal),
+        .debug_i_avg_sel            (debug_i_avg_sel),
+        .debug_q_avg_sel            (debug_q_avg_sel)
+    );
 
     // ============================================================
-    // UART TX routing by locked owner
+    // UART TX arbitration
     // ============================================================
 
-    always_comb begin
-        uart_tx_data       = 8'h00;
-        uart_tx_valid      = 1'b0;
-        formatter_tx_ready = 1'b0;
-        debug_tx_ready     = 1'b0;
+    tx_arbiter u_tx_arbiter (
+        .clk                 (clk),
+        .rst_sync_n          (rst_sync_n),
 
-        case (tx_owner_r)
-            TxOwnerFormatter: begin
-                uart_tx_data       = formatter_tx_data;
-                uart_tx_valid      = formatter_tx_valid;
-                formatter_tx_ready = uart_tx_ready;
-            end
+        .formatter_tx_data   (formatter_tx_data),
+        .formatter_tx_valid  (formatter_tx_valid),
+        .formatter_tx_ready  (formatter_tx_ready),
+        .formatter_busy      (formatter_busy),
+        .formatter_done_pulse(formatter_done_pulse),
 
-            TxOwnerDebug: begin
-                uart_tx_data   = debug_tx_data;
-                uart_tx_valid  = debug_tx_valid;
-                debug_tx_ready = uart_tx_ready;
-            end
+        .debug_tx_data       (debug_tx_data),
+        .debug_tx_valid      (debug_tx_valid),
+        .debug_tx_ready      (debug_tx_ready),
+        .debug_busy          (debug_busy),
+        .debug_done_pulse    (debug_done_pulse),
 
-            default: begin
-            end
-        endcase
-    end
+        .debug_pending       (debug_pending),
+        .debug_start         (debug_start),
+
+        .uart_tx_data        (uart_tx_data),
+        .uart_tx_valid       (uart_tx_valid),
+        .uart_tx_ready       (uart_tx_ready)
+    );
 
     // ============================================================
     // Sequencer
@@ -536,7 +603,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .clk                   (clk),
         .rst_sync_n            (rst_sync_n),
 
-        .init_done             (init_done),
+        .start_sequencer       (start_sequencer),
         .reset_wait_cycles     (reset_wait_cycles),
 
         .rd_instr_addr         (rd_instr_addr),
@@ -645,7 +712,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .rst_sync_n         (rst_sync_n),
 
         .start              (debug_start),
-        .cal_update         (debug_cal_update),
+        .cal_update         (debug_pending_is_cal),
         .i_avg              (debug_i_avg_sel),
         .q_avg              (debug_q_avg_sel),
         .cal_i_threshold    (reg_cal_i_threshold),

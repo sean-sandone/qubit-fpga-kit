@@ -1,7 +1,9 @@
 //------------------------------------------------------------------------------
 // PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
 //------------------------------------------------------------------------------
-// AUTHORS: Sean Sandone
+// Copyright (C) 2026 Sean Sandone
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Please see the LICENSE file for details.
 // WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
 //------------------------------------------------------------------------------
 
@@ -120,7 +122,8 @@ module register_bank (
     output logic meas_state,
     output logic meas_state_valid,
 
-    output logic cal_debug_update_pulse
+    output logic cal_debug_update_pulse,
+    output logic cal_debug_ref0_sel
 );
 
     import rtl_pkg::*;
@@ -163,6 +166,7 @@ module register_bank (
     logic reg_meas_state_r;
     logic reg_meas_state_valid_r;
     logic cal_debug_update_pulse_r;
+    logic cal_debug_ref0_sel_r;
 
     // ============================================================
     // Read data registers
@@ -202,6 +206,7 @@ module register_bank (
             reg_meas_state_r          <= 1'b0;
             reg_meas_state_valid_r    <= 1'b0;
             cal_debug_update_pulse_r  <= 1'b0;
+            cal_debug_ref0_sel_r      <= 1'b0;
 
             for (i = 0; i < PlayCfgDepth; i = i + 1) begin
                 play_cfg_mem_r[i]   <= '0;
@@ -283,6 +288,7 @@ module register_bank (
                         reg_cal_i0_ref_r     <= cal_i_avg_in;
                         reg_cal_q0_ref_r     <= cal_q_avg_in;
                         reg_cal_i0q0_valid_r <= 1'b1;
+                        cal_debug_ref0_sel_r <= 1'b1;
 
                         if (reg_cal_i1q1_valid_r) begin
                             reg_cal_i_threshold_r     <= (cal_i_avg_in + reg_cal_i1_ref_r) >>> 1;
@@ -297,6 +303,7 @@ module register_bank (
                         reg_cal_i1_ref_r     <= cal_i_avg_in;
                         reg_cal_q1_ref_r     <= cal_q_avg_in;
                         reg_cal_i1q1_valid_r <= 1'b1;
+                        cal_debug_ref0_sel_r <= 1'b0;
 
                         if (reg_cal_i0q0_valid_r) begin
                             reg_cal_i_threshold_r     <= (reg_cal_i0_ref_r + cal_i_avg_in) >>> 1;
@@ -368,5 +375,6 @@ module register_bank (
     assign meas_state_valid = reg_meas_state_valid_r;
 
     assign cal_debug_update_pulse = cal_debug_update_pulse_r;
+    assign cal_debug_ref0_sel     = cal_debug_ref0_sel_r;
 
 endmodule
