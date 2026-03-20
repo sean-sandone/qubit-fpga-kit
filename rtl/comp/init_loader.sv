@@ -40,10 +40,11 @@ module init_loader (
     output rtl_pkg::instr_t               wr_instr_data,
 
     // ============================================================
-    // Status
+    // Status / sequencer start pulse
     // ============================================================
 
     output logic init_active,
+    output logic init_done_pulse,
     output logic init_done
 );
 
@@ -115,18 +116,19 @@ module init_loader (
         wr_instr_addr         = '0;
         wr_instr_data         = '0;
 
-        init_active           = 1'b0;
-        init_done             = 1'b0;
+        init_active      = 1'b0;
+        init_done_pulse  = 1'b0;
+        init_done        = 1'b0;
 
         case (state_r)
             InitStateIdle: begin
-                init_active = 1'b0;
-                init_done   = 1'b0;
+                init_active     = 1'b0;
+                init_done_pulse = 1'b0;
+                init_done       = 1'b0;
             end
 
             InitStateRun: begin
                 init_active = 1'b1;
-                init_done   = 1'b0;
 
                 unique case (rom_word.op)
                     INIT_OP_NOP: begin
@@ -162,6 +164,8 @@ module init_loader (
                     end
 
                     INIT_OP_END: begin
+                        init_done_pulse = 1'b1;
+                        init_done       = 1'b1;
                     end
 
                     default: begin
@@ -170,13 +174,15 @@ module init_loader (
             end
 
             InitStateDone: begin
-                init_active = 1'b0;
-                init_done   = 1'b1;
+                init_active     = 1'b0;
+                init_done_pulse = 1'b0;
+                init_done       = 1'b1;
             end
 
             default: begin
-                init_active = 1'b0;
-                init_done   = 1'b1;
+                init_active     = 1'b0;
+                init_done_pulse = 1'b0;
+                init_done       = 1'b1;
             end
         endcase
     end

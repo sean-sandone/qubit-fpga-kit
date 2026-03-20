@@ -17,6 +17,7 @@ import serial  # pip install pyserial
 
 from qubit_sim.virtual_fpga import VirtualFPGA
 from qubit_sim.qubit_model import QubitSim, iq_to_complex_envelope
+from qubit_sim.uart_menu import UartMenu, poll_console_key
 
 
 AmpFullScale = 0x0100
@@ -446,7 +447,38 @@ def run_uart_server(
 
         _debug_log("Serial port opened", debug=debug, log_path=log_path)
 
+        def _send_host_packet(name: str, pkt: bytes) -> None:
+            hex_dump = pkt.hex(" ")
+
+            if debug:
+                _debug_log(
+                    f"TX_HOST {name} bytes={len(pkt)} hex={hex_dump}",
+                    debug=True,
+                    log_path=None,
+                )
+
+            if log_path is not None:
+                _debug_log(
+                    f"TX_HOST {name} bytes={len(pkt)} hex={hex_dump}",
+                    debug=False,
+                    log_path=log_path,
+                )
+
+            ser.write(pkt)
+            ser.flush()
+
+        menu = UartMenu(_send_host_packet)
+
+        print("(m) for menu", flush=True)
+
         while True:
+            key = poll_console_key()
+            if key is not None and key.lower() == "m":
+                print()
+                menu.run()
+                print()
+                print("(m) for menu", flush=True)
+
             line = ser.readline()
             if not line:
                 continue

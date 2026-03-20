@@ -162,6 +162,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     instr_t               init_wr_instr_data;
 
     logic                 init_active;
+    logic                 init_done_pulse;
     logic                 init_done;
 
     defaults_rom u_defaults_rom (
@@ -196,6 +197,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .wr_instr_data         (init_wr_instr_data),
 
         .init_active           (init_active),
+        .init_done_pulse       (init_done_pulse),
         .init_done             (init_done)
     );
 
@@ -229,6 +231,10 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
     logic seq_done_pulse_in;
     logic clear_start_exp;
+
+    logic start_sequencer;
+
+    assign start_sequencer = start_exp | init_done_pulse;
 
     // ============================================================
     // Calibration results / registers
@@ -267,6 +273,11 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic clear_meas_state_valid;
     logic measure_start;
 
+    assign clear_meas_state_valid = measure_start;
+    assign clear_start_exp = seq_busy;
+
+
+
     // ============================================================
     // Register write arbitration
     // ============================================================
@@ -302,9 +313,6 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     measure_cfg_t         uart_reg_wr_measure_cfg_data;
     logic [InstrAw-1:0]   uart_reg_wr_instr_addr;
     instr_t               uart_reg_wr_instr_data;
-
-    assign clear_start_exp        = 1'b0;
-    assign clear_meas_state_valid = measure_start;
 
     // ============================================================
     // Register bank
@@ -593,7 +601,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .clk                   (clk),
         .rst_sync_n            (rst_sync_n),
 
-        .init_done             (init_done),
+        .start_sequencer       (start_sequencer),
         .reset_wait_cycles     (reset_wait_cycles),
 
         .rd_instr_addr         (rd_instr_addr),
