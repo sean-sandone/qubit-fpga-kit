@@ -267,6 +267,42 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic clear_meas_state_valid;
     logic measure_start;
 
+    // ============================================================
+    // Register write arbitration
+    // ============================================================
+
+    logic                 arb_wr_control;
+    logic                 arb_control_start_exp;
+    logic                 arb_control_soft_reset;
+
+    logic                 arb_wr_reset_wait_cycles;
+    logic [31:0]          arb_wr_reset_wait_cycles_data;
+
+    logic                 arb_wr_play_cfg;
+    logic [PlayCfgAw-1:0] arb_wr_play_cfg_addr;
+    play_cfg_t            arb_wr_play_cfg_data;
+
+    logic                 arb_wr_measure_cfg;
+    logic [MeasCfgAw-1:0] arb_wr_measure_cfg_addr;
+    measure_cfg_t         arb_wr_measure_cfg_data;
+
+    logic                 arb_wr_instr;
+    logic [InstrAw-1:0]   arb_wr_instr_addr;
+    instr_t               arb_wr_instr_data;
+
+    logic                 uart_reg_wr_req_valid;
+    logic                 uart_reg_wr_req_accept;
+    reg_wr_kind_t         uart_reg_wr_req_kind;
+    logic                 uart_reg_wr_control_start_exp;
+    logic                 uart_reg_wr_control_soft_reset;
+    logic [31:0]          uart_reg_wr_reset_wait_cycles_data;
+    logic [PlayCfgAw-1:0] uart_reg_wr_play_cfg_addr;
+    play_cfg_t            uart_reg_wr_play_cfg_data;
+    logic [MeasCfgAw-1:0] uart_reg_wr_measure_cfg_addr;
+    measure_cfg_t         uart_reg_wr_measure_cfg_data;
+    logic [InstrAw-1:0]   uart_reg_wr_instr_addr;
+    instr_t               uart_reg_wr_instr_data;
+
     assign clear_start_exp        = 1'b0;
     assign clear_meas_state_valid = measure_start;
 
@@ -278,24 +314,24 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .clk                   (clk),
         .rst_sync_n            (rst_sync_n),
 
-        .wr_control            (init_wr_control),
-        .control_start_exp_in  (init_control_start_exp),
-        .control_soft_reset_in (init_control_soft_reset),
+        .wr_control            (arb_wr_control),
+        .control_start_exp_in  (arb_control_start_exp),
+        .control_soft_reset_in (arb_control_soft_reset),
 
-        .wr_reset_wait_cycles      (init_wr_reset_wait_cycles),
-        .wr_reset_wait_cycles_data (init_wr_reset_wait_cycles_data),
+        .wr_reset_wait_cycles      (arb_wr_reset_wait_cycles),
+        .wr_reset_wait_cycles_data (arb_wr_reset_wait_cycles_data),
 
-        .wr_play_cfg           (init_wr_play_cfg),
-        .wr_play_cfg_addr      (init_wr_play_cfg_addr),
-        .wr_play_cfg_data      (init_wr_play_cfg_data),
+        .wr_play_cfg           (arb_wr_play_cfg),
+        .wr_play_cfg_addr      (arb_wr_play_cfg_addr),
+        .wr_play_cfg_data      (arb_wr_play_cfg_data),
 
-        .wr_measure_cfg        (init_wr_measure_cfg),
-        .wr_measure_cfg_addr   (init_wr_measure_cfg_addr),
-        .wr_measure_cfg_data   (init_wr_measure_cfg_data),
+        .wr_measure_cfg        (arb_wr_measure_cfg),
+        .wr_measure_cfg_addr   (arb_wr_measure_cfg_addr),
+        .wr_measure_cfg_data   (arb_wr_measure_cfg_data),
 
-        .wr_instr              (init_wr_instr),
-        .wr_instr_addr         (init_wr_instr_addr),
-        .wr_instr_data         (init_wr_instr_data),
+        .wr_instr              (arb_wr_instr),
+        .wr_instr_addr         (arb_wr_instr_addr),
+        .wr_instr_data         (arb_wr_instr_data),
 
         .wr_cal_results        (cal_accum_done_pulse),
         .cal_store_sel_in      (cal_accum_store_sel),
@@ -354,6 +390,100 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     );
 
     // ============================================================
+    // UART register write receiver
+    // ============================================================
+
+    write_reg_rx u_write_reg_rx (
+        .clk                    (clk),
+        .rst_sync_n             (rst_sync_n),
+        .enable                 (init_done),
+
+        .rx_byte_valid          (uart_dout_vld),
+        .rx_byte                (uart_dout),
+
+        .req_valid              (uart_reg_wr_req_valid),
+        .req_accept             (uart_reg_wr_req_accept),
+        .req_kind               (uart_reg_wr_req_kind),
+
+        .control_start_exp      (uart_reg_wr_control_start_exp),
+        .control_soft_reset     (uart_reg_wr_control_soft_reset),
+        .reset_wait_cycles_data (uart_reg_wr_reset_wait_cycles_data),
+
+        .play_cfg_addr          (uart_reg_wr_play_cfg_addr),
+        .play_cfg_data          (uart_reg_wr_play_cfg_data),
+
+        .measure_cfg_addr       (uart_reg_wr_measure_cfg_addr),
+        .measure_cfg_data       (uart_reg_wr_measure_cfg_data),
+
+        .instr_addr             (uart_reg_wr_instr_addr),
+        .instr_data             (uart_reg_wr_instr_data)
+    );
+
+    // ============================================================
+    // Register write arbitration
+    // ============================================================
+
+    write_reg_arbiter u_write_reg_arbiter (
+        .clk                         (clk),
+        .rst_sync_n                  (rst_sync_n),
+
+        .init_wr_control             (init_wr_control),
+        .init_control_start_exp      (init_control_start_exp),
+        .init_control_soft_reset     (init_control_soft_reset),
+
+        .init_wr_reset_wait_cycles   (init_wr_reset_wait_cycles),
+        .init_wr_reset_wait_cycles_data(init_wr_reset_wait_cycles_data),
+
+        .init_wr_play_cfg            (init_wr_play_cfg),
+        .init_wr_play_cfg_addr       (init_wr_play_cfg_addr),
+        .init_wr_play_cfg_data       (init_wr_play_cfg_data),
+
+        .init_wr_measure_cfg         (init_wr_measure_cfg),
+        .init_wr_measure_cfg_addr    (init_wr_measure_cfg_addr),
+        .init_wr_measure_cfg_data    (init_wr_measure_cfg_data),
+
+        .init_wr_instr               (init_wr_instr),
+        .init_wr_instr_addr          (init_wr_instr_addr),
+        .init_wr_instr_data          (init_wr_instr_data),
+
+        .uart_req_valid              (uart_reg_wr_req_valid),
+        .uart_req_accept             (uart_reg_wr_req_accept),
+        .uart_req_kind               (uart_reg_wr_req_kind),
+
+        .uart_control_start_exp      (uart_reg_wr_control_start_exp),
+        .uart_control_soft_reset     (uart_reg_wr_control_soft_reset),
+        .uart_reset_wait_cycles_data (uart_reg_wr_reset_wait_cycles_data),
+
+        .uart_play_cfg_addr          (uart_reg_wr_play_cfg_addr),
+        .uart_play_cfg_data          (uart_reg_wr_play_cfg_data),
+
+        .uart_measure_cfg_addr       (uart_reg_wr_measure_cfg_addr),
+        .uart_measure_cfg_data       (uart_reg_wr_measure_cfg_data),
+
+        .uart_instr_addr             (uart_reg_wr_instr_addr),
+        .uart_instr_data             (uart_reg_wr_instr_data),
+
+        .arb_wr_control              (arb_wr_control),
+        .arb_control_start_exp       (arb_control_start_exp),
+        .arb_control_soft_reset      (arb_control_soft_reset),
+
+        .arb_wr_reset_wait_cycles    (arb_wr_reset_wait_cycles),
+        .arb_wr_reset_wait_cycles_data(arb_wr_reset_wait_cycles_data),
+
+        .arb_wr_play_cfg             (arb_wr_play_cfg),
+        .arb_wr_play_cfg_addr        (arb_wr_play_cfg_addr),
+        .arb_wr_play_cfg_data        (arb_wr_play_cfg_data),
+
+        .arb_wr_measure_cfg          (arb_wr_measure_cfg),
+        .arb_wr_measure_cfg_addr     (arb_wr_measure_cfg_addr),
+        .arb_wr_measure_cfg_data     (arb_wr_measure_cfg_data),
+
+        .arb_wr_instr                (arb_wr_instr),
+        .arb_wr_instr_addr           (arb_wr_instr_addr),
+        .arb_wr_instr_data           (arb_wr_instr_data)
+    );
+
+    // ============================================================
     // Sequencer -> formatter path
     // ============================================================
 
@@ -406,25 +536,25 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     // ============================================================
 
     debug_ctrl u_debug_ctrl (
-        .clk                      (clk),
-        .rst_sync_n               (rst_sync_n),
-        .reg_cal_debug_update_pulse(reg_cal_debug_update_pulse),
-        .measure_rsp_done_pulse   (measure_rsp_done_pulse),
-        .debug_start              (debug_start),
+        .clk                        (clk),
+        .rst_sync_n                 (rst_sync_n),
+        .reg_cal_debug_update_pulse (reg_cal_debug_update_pulse),
+        .measure_rsp_done_pulse     (measure_rsp_done_pulse),
+        .debug_start                (debug_start),
 
-        .cal_debug_ref0_sel       (reg_cal_debug_ref0_sel),
+        .cal_debug_ref0_sel         (reg_cal_debug_ref0_sel),
 
-        .reg_cal_i0_ref           (reg_cal_i0_ref),
-        .reg_cal_q0_ref           (reg_cal_q0_ref),
-        .reg_cal_i1_ref           (reg_cal_i1_ref),
-        .reg_cal_q1_ref           (reg_cal_q1_ref),
-        .measure_i_avg            (measure_i_avg),
-        .measure_q_avg            (measure_q_avg),
+        .reg_cal_i0_ref             (reg_cal_i0_ref),
+        .reg_cal_q0_ref             (reg_cal_q0_ref),
+        .reg_cal_i1_ref             (reg_cal_i1_ref),
+        .reg_cal_q1_ref             (reg_cal_q1_ref),
+        .measure_i_avg              (measure_i_avg),
+        .measure_q_avg              (measure_q_avg),
 
-        .debug_pending            (debug_pending),
-        .debug_pending_is_cal     (debug_pending_is_cal),
-        .debug_i_avg_sel          (debug_i_avg_sel),
-        .debug_q_avg_sel          (debug_q_avg_sel)
+        .debug_pending              (debug_pending),
+        .debug_pending_is_cal       (debug_pending_is_cal),
+        .debug_i_avg_sel            (debug_i_avg_sel),
+        .debug_q_avg_sel            (debug_q_avg_sel)
     );
 
     // ============================================================
