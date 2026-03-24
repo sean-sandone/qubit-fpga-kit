@@ -11,7 +11,6 @@ import json
 import time
 import struct
 import math
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -21,7 +20,7 @@ import serial  # pip install pyserial
 from qubit_sim.virtual_fpga import VirtualFPGA
 from qubit_sim.qubit_model import QubitSim, iq_to_complex_envelope
 from qubit_sim.uart_menu import UartMenu, poll_console_key
-
+from qubit_sim.web_ui import WebUiApp
 
 AmpFullScale = 0x0100
 PhaseTurnScale = 0x10000
@@ -31,7 +30,7 @@ NsPerSecond = 1.0e9
 Q2_14FracBits = 14
 Q2_14Scale = 1 << Q2_14FracBits
 Q2_14MinFloat = -2.0
-Q2_14MaxFloat = (32767.0 / float(Q2_14Scale))  # 1.99993896484375
+Q2_14MaxFloat = (32767.0 / float(Q2_14Scale)) # 1.99993896484375
 
 RegDumpSync0 = 0xD4
 RegDumpSync1 = 0x4D
@@ -506,11 +505,15 @@ def _process_rx_text_line(
                 debug=True,
                 log_path=None,
             )
-            _debug_log(f"TX_BIN_HEX {bin_hex}", debug=True, log_path=None)
 
         if log_path is not None:
             _debug_log(
                 f"TX_BIN bytes={len(pkt)} sync=A5 5A type=02 n={pkt[3]} fmt=Q2.14",
+                debug=False,
+                log_path=log_path,
+            )
+            _debug_log(
+                f"TX_BIN_HEX {bin_hex}",
                 debug=False,
                 log_path=log_path,
             )
@@ -724,6 +727,7 @@ def run_uart_server(
 
             parser.feed(chunk)
 
+
 def _main() -> None:
     import argparse
 
@@ -736,7 +740,25 @@ def _main() -> None:
     parser.add_argument("--timeout_s", type=float, default=0.2, help="Serial read timeout in seconds")
     parser.add_argument("--debug", action="store_true", help="Enable terminal debug logging")
     parser.add_argument("--log_file", default=None, help="Optional log file path")
+
+    parser.add_argument("--ui", action="store_true", help="Start the web UI")
+    parser.add_argument("--ui_host", default="127.0.0.1", help="Web UI bind host")
+    parser.add_argument("--ui_port", type=int, default=5000, help="Web UI port")
+
     args = parser.parse_args()
+
+    ui_app = None
+    if args.ui:
+        ui_app = WebUiApp(
+            host=args.ui_host,
+            port=args.ui_port,
+            fs_hz=args.fs_hz,
+            if_hz=args.if_hz,
+        )
+
+        import threading
+        ui_thread = threading.Thread(target=ui_app.run, daemon=True)
+        ui_thread.start()
 
     run_uart_server(
         port=args.port,
@@ -747,8 +769,8 @@ def _main() -> None:
         timeout_s=args.timeout_s,
         debug=args.debug,
         log_file=args.log_file,
+        ui_app=ui_app,
     )
-
 
 if __name__ == "__main__":
     _main()

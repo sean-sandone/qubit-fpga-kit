@@ -59,9 +59,9 @@ module register_dump_tx (
 
     import rtl_pkg::*;
 
-    localparam int unsigned PlayCfgWordsPerEntry = 5;
-    localparam int unsigned MeasCfgWordsPerEntry = 3;
-    localparam int unsigned PacketLen            = 8;
+    localparam int unsigned PlayCfgWordsPerEntry = (($bits(play_cfg_t)    + 31) / 32);
+    localparam int unsigned MeasCfgWordsPerEntry = (($bits(measure_cfg_t) + 31) / 32);
+    localparam int unsigned PacketLen            = 9;
 
     typedef enum logic [2:0] {
         DumpStateIdle   = 3'd0,
@@ -75,7 +75,7 @@ module register_dump_tx (
     dump_state_t state_r;
 
     logic        load_record_r;
-    logic [7:0]  packet_byte_idx_r;
+    logic [3:0]  packet_byte_idx_r;
     logic [7:0]  record_group_r;
     logic [7:0]  record_index_r;
     logic [31:0] record_data_r;
@@ -95,6 +95,14 @@ module register_dump_tx (
     logic [31:0] play_data_word;
     logic [7:0]  meas_group;
     logic [31:0] meas_data_word;
+
+    logic [$bits(play_cfg_t)-1:0]    dump_play_cfg_flat;
+    logic [$bits(measure_cfg_t)-1:0] dump_measure_cfg_flat;
+    logic [$bits(instr_t)-1:0]       dump_instr_flat;
+
+    assign dump_play_cfg_flat    = dump_rd_play_cfg_data;
+    assign dump_measure_cfg_flat = dump_rd_measure_cfg_data;
+    assign dump_instr_flat       = dump_rd_instr_data;
 
     always_comb begin
         unique case (scalar_idx_r)
@@ -126,24 +134,28 @@ module register_dump_tx (
     always_comb begin
         unique case (play_word_idx_r)
             3'd0: begin
-                play_group = RegDumpGroupPlayCfg0;
-                play_data_word = dump_rd_play_cfg_data[31:0];
+                play_group     = RegDumpGroupPlayCfg0;
+                play_data_word = dump_play_cfg_flat[31:0];
             end
             3'd1: begin
-                play_group = RegDumpGroupPlayCfg1;
-                play_data_word = dump_rd_play_cfg_data[63:32];
+                play_group     = RegDumpGroupPlayCfg1;
+                play_data_word = dump_play_cfg_flat[63:32];
             end
             3'd2: begin
-                play_group = RegDumpGroupPlayCfg2;
-                play_data_word = dump_rd_play_cfg_data[95:64];
+                play_group     = RegDumpGroupPlayCfg2;
+                play_data_word = dump_play_cfg_flat[95:64];
             end
             3'd3: begin
-                play_group = RegDumpGroupPlayCfg3;
-                play_data_word = dump_rd_play_cfg_data[127:96];
+                play_group     = RegDumpGroupPlayCfg3;
+                play_data_word = dump_play_cfg_flat[127:96];
+            end
+            3'd4: begin
+                play_group     = RegDumpGroupPlayCfg4;
+                play_data_word = dump_play_cfg_flat[159:128];
             end
             default: begin
-                play_group = RegDumpGroupPlayCfg4;
-                play_data_word = {28'd0, dump_rd_play_cfg_data[163:160]};
+                play_group     = RegDumpGroupPlayCfg5;
+                play_data_word = {28'd0, dump_play_cfg_flat[$bits(play_cfg_t)-1 -: 4]};
             end
         endcase
     end
@@ -151,16 +163,16 @@ module register_dump_tx (
     always_comb begin
         unique case (meas_word_idx_r)
             2'd0: begin
-                meas_group = RegDumpGroupMeasCfg0;
-                meas_data_word = dump_rd_measure_cfg_data[31:0];
+                meas_group     = RegDumpGroupMeasCfg0;
+                meas_data_word = dump_measure_cfg_flat[31:0];
             end
             2'd1: begin
-                meas_group = RegDumpGroupMeasCfg1;
-                meas_data_word = dump_rd_measure_cfg_data[63:32];
+                meas_group     = RegDumpGroupMeasCfg1;
+                meas_data_word = dump_measure_cfg_flat[63:32];
             end
             default: begin
-                meas_group = RegDumpGroupMeasCfg2;
-                meas_data_word = {16'd0, dump_rd_measure_cfg_data[79:64]};
+                meas_group     = RegDumpGroupMeasCfg2;
+                meas_data_word = {16'd0, dump_measure_cfg_flat[$bits(measure_cfg_t)-1 -: 16]};
             end
         endcase
     end
@@ -174,14 +186,14 @@ module register_dump_tx (
 
     always_comb begin
         unique case (packet_byte_idx_r)
-            8'd0: tx_data = RegDumpSync0;
-            8'd1: tx_data = RegDumpSync1;
-            8'd2: tx_data = RegDumpType;
-            8'd3: tx_data = record_group_r;
-            8'd4: tx_data = record_index_r;
-            8'd5: tx_data = record_data_r[7:0];
-            8'd6: tx_data = record_data_r[15:8];
-            8'd7: tx_data = record_data_r[23:16];
+            4'd0: tx_data = RegDumpSync0;
+            4'd1: tx_data = RegDumpSync1;
+            4'd2: tx_data = RegDumpType;
+            4'd3: tx_data = record_group_r;
+            4'd4: tx_data = record_index_r;
+            4'd5: tx_data = record_data_r[7:0];
+            4'd6: tx_data = record_data_r[15:8];
+            4'd7: tx_data = record_data_r[23:16];
             default: tx_data = record_data_r[31:24];
         endcase
     end
@@ -190,7 +202,7 @@ module register_dump_tx (
         if (!rst_sync_n) begin
             state_r            <= DumpStateIdle;
             load_record_r      <= 1'b0;
-            packet_byte_idx_r  <= 8'd0;
+            packet_byte_idx_r  <= 4'd0;
             record_group_r     <= 8'd0;
             record_index_r     <= 8'd0;
             record_data_r      <= 32'd0;
@@ -209,7 +221,7 @@ module register_dump_tx (
 
             case (state_r)
                 DumpStateIdle: begin
-                    packet_byte_idx_r <= 8'd0;
+                    packet_byte_idx_r <= 4'd0;
                     load_record_r <= 1'b0;
                     if (start) begin
                         state_r            <= DumpStateScalar;
@@ -234,7 +246,7 @@ module register_dump_tx (
 
                 default: begin
                     if (load_record_r) begin
-                        packet_byte_idx_r <= 8'd0;
+                        packet_byte_idx_r <= 4'd0;
                         load_record_r <= 1'b0;
 
                         unique case (state_r)
@@ -276,7 +288,7 @@ module register_dump_tx (
                                 end else begin
                                     record_group_r <= RegDumpGroupInstr;
                                     record_index_r <= instr_idx_r;
-                                    record_data_r  <= dump_rd_instr_data;
+                                    record_data_r  <= dump_instr_flat[31:0];
                                 end
                             end
 
@@ -285,16 +297,16 @@ module register_dump_tx (
                         endcase
                     end else if (tx_valid && tx_ready) begin
                         if (packet_byte_idx_r == (PacketLen - 1)) begin
-                            packet_byte_idx_r <= 8'd0;
+                            packet_byte_idx_r <= 4'd0;
 
                             unique case (state_r)
                                 DumpStateScalar: begin
                                     if (scalar_idx_r == (RegDumpScalarCount - 1)) begin
-                                        state_r          <= DumpStatePlay;
-                                        play_idx_r       <= '0;
-                                        play_word_idx_r  <= 3'd0;
+                                        state_r           <= DumpStatePlay;
+                                        play_idx_r        <= '0;
+                                        play_word_idx_r   <= 3'd0;
                                         play_send_valid_r <= 1'b0;
-                                        load_record_r    <= 1'b1;
+                                        load_record_r     <= 1'b1;
                                     end else begin
                                         scalar_idx_r  <= scalar_idx_r + 8'd1;
                                         load_record_r <= 1'b1;
@@ -366,7 +378,7 @@ module register_dump_tx (
                                 end
                             endcase
                         end else begin
-                            packet_byte_idx_r <= packet_byte_idx_r + 8'd1;
+                            packet_byte_idx_r <= packet_byte_idx_r + 4'd1;
                         end
                     end
                 end

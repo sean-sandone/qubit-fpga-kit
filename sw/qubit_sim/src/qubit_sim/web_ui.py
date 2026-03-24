@@ -337,3 +337,24 @@ class WebUiApp:
 
     def run(self) -> None:
         self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False)
+
+def _main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run the Quantum FPGA web UI")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind host")
+    parser.add_argument("--port", type=int, default=5000, help="HTTP port")
+    parser.add_argument("--fs_hz", type=float, default=1.0e9, help="Waveform preview sample rate")
+    parser.add_argument("--if_hz", type=float, default=50.0e6, help="Waveform preview IF in Hz")
+    args = parser.parse_args()
+
+    app = WebUiApp(
+        host=args.host,
+        port=args.port,
+        fs_hz=args.fs_hz,
+        if_hz=args.if_hz,
+    )
+    app.run()
+
+if __name__ == "__main__":
+    _main()

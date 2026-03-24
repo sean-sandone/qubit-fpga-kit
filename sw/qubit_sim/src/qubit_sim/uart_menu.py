@@ -56,7 +56,7 @@ RegDumpGroupInstrValid = 0x31
 
 RegDumpScalarCount = 21
 
-DumpRecordLength = 8
+DumpRecordLength = 9
 ExpectedDumpRecordCount = (
     RegDumpScalarCount
     + (PlayCfgDepth * 7)
@@ -464,7 +464,7 @@ class UartMenu:
 
     def send_control(self) -> None:
         pkt = self.build_control_packet(self.shadow.start_exp, self.shadow.soft_reset, 0)
-        self._send_and_confirm("CONTROL", pkt)
+        self._send_packet("CONTROL", pkt)
 
     def send_reset_wait(self) -> None:
         pkt = self.build_reset_wait_packet(self.shadow.reset_wait_cycles)
@@ -495,19 +495,18 @@ class UartMenu:
             self.send_instr(idx)
 
     def send_all_registers(self) -> None:
-        self.send_control()
         self.send_reset_wait()
         self.send_all_play_cfgs()
         self.send_all_measure_cfgs()
         self.send_all_instr()
 
     def send_start_experiment_pulse(self) -> None:
-        pkt = self.build_control_packet(1, self.shadow.soft_reset, 0)
-        self._send_and_confirm("CONTROL_START_EXP", pkt)
+        pkt = self.build_control_packet(1, 0, 0)
+        self._send_packet("CONTROL_START_EXP", pkt)
 
     def send_soft_reset_pulse(self) -> None:
-        pkt = self.build_control_packet(self.shadow.start_exp, 1, 0)
-        self._send_and_confirm("CONTROL_SOFT_RESET", pkt)
+        pkt = self.build_control_packet(0, 1, 0)
+        self._send_packet("CONTROL_SOFT_RESET", pkt)
 
     # -------------------------------------------------------------------------
     # Dump ingest
@@ -616,35 +615,17 @@ class UartMenu:
         while True:
             print()
             print("Control register:")
-            print("  1. Set start_exp = 1")
-            print("  2. Set start_exp = 0")
-            print("  3. Set soft_reset = 1")
-            print("  4. Set soft_reset = 0")
-            print("  5. Enter both bits manually")
-            print("  6. Send current control value")
-            print("  7. Request FPGA register dump")
+            print("  1. Pulse start_exp = 1")
+            print("  2. Pulse soft_reset = 1")
+            print("  3. Request FPGA register dump")
             print("  b. Back")
             sel = input("Select: ").strip().lower()
 
             if sel == "1":
-                self.shadow.start_exp = 1
-                self.send_control()
+                self.send_start_experiment_pulse()
             elif sel == "2":
-                self.shadow.start_exp = 0
-                self.send_control()
+                self.send_soft_reset_pulse()
             elif sel == "3":
-                self.shadow.soft_reset = 1
-                self.send_control()
-            elif sel == "4":
-                self.shadow.soft_reset = 0
-                self.send_control()
-            elif sel == "5":
-                self.shadow.start_exp = 1 if self._parse_int(input("start_exp (0/1): "), self.shadow.start_exp) != 0 else 0
-                self.shadow.soft_reset = 1 if self._parse_int(input("soft_reset (0/1): "), self.shadow.soft_reset) != 0 else 0
-                self.send_control()
-            elif sel == "6":
-                self.send_control()
-            elif sel == "7":
                 self.request_register_dump()
             elif sel == "b":
                 return
@@ -810,29 +791,26 @@ class UartMenu:
         while True:
             print()
             print("Batch write:")
-            print("  1. Send control only")
-            print("  2. Send reset-wait only")
-            print("  3. Send all PLAY configs")
-            print("  4. Send all MEASURE configs")
-            print("  5. Send all INSTR entries")
-            print("  6. Send everything")
-            print("  7. Request FPGA register dump")
+            print("  1. Send reset-wait only")
+            print("  2. Send all PLAY configs")
+            print("  3. Send all MEASURE configs")
+            print("  4. Send all INSTR entries")
+            print("  5. Send everything")
+            print("  6. Request FPGA register dump")
             print("  b. Back")
             sel = input("Select: ").strip().lower()
 
             if sel == "1":
-                self.send_control()
-            elif sel == "2":
                 self.send_reset_wait()
-            elif sel == "3":
+            elif sel == "2":
                 self.send_all_play_cfgs()
-            elif sel == "4":
+            elif sel == "3":
                 self.send_all_measure_cfgs()
-            elif sel == "5":
+            elif sel == "4":
                 self.send_all_instr()
-            elif sel == "6":
+            elif sel == "5":
                 self.send_all_registers()
-            elif sel == "7":
+            elif sel == "6":
                 self.request_register_dump()
             elif sel == "b":
                 return
