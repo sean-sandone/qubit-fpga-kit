@@ -14,6 +14,7 @@ module write_reg_arbiter (
     input  logic                          init_wr_control,
     input  logic                          init_control_start_exp,
     input  logic                          init_control_soft_reset,
+    input  logic                          init_control_read_all,
 
     input  logic                          init_wr_reset_wait_cycles,
     input  logic [31:0]                   init_wr_reset_wait_cycles_data,
@@ -36,6 +37,7 @@ module write_reg_arbiter (
 
     input  logic                          uart_control_start_exp,
     input  logic                          uart_control_soft_reset,
+    input  logic                          uart_control_read_all,
     input  logic [31:0]                   uart_reset_wait_cycles_data,
 
     input  logic [rtl_pkg::PlayCfgAw-1:0] uart_play_cfg_addr,
@@ -50,6 +52,7 @@ module write_reg_arbiter (
     output logic                          arb_wr_control,
     output logic                          arb_control_start_exp,
     output logic                          arb_control_soft_reset,
+    output logic                          arb_control_read_all,
 
     output logic                          arb_wr_reset_wait_cycles,
     output logic [31:0]                   arb_wr_reset_wait_cycles_data,
@@ -73,6 +76,7 @@ module write_reg_arbiter (
         arb_wr_control                = 1'b0;
         arb_control_start_exp         = 1'b0;
         arb_control_soft_reset        = 1'b0;
+        arb_control_read_all          = 1'b0;
 
         arb_wr_reset_wait_cycles      = 1'b0;
         arb_wr_reset_wait_cycles_data = '0;
@@ -97,6 +101,7 @@ module write_reg_arbiter (
             arb_wr_control                = init_wr_control;
             arb_control_start_exp         = init_control_start_exp;
             arb_control_soft_reset        = init_control_soft_reset;
+            arb_control_read_all          = init_control_read_all;
 
             arb_wr_reset_wait_cycles      = init_wr_reset_wait_cycles;
             arb_wr_reset_wait_cycles_data = init_wr_reset_wait_cycles_data;
@@ -121,6 +126,7 @@ module write_reg_arbiter (
                     arb_wr_control         = 1'b1;
                     arb_control_start_exp  = uart_control_start_exp;
                     arb_control_soft_reset = uart_control_soft_reset;
+                    arb_control_read_all   = uart_control_read_all;
                 end
 
                 REG_WR_KIND_RESET_WAIT: begin

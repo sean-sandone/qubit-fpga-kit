@@ -15,13 +15,14 @@ module write_reg_rx (
     input  logic       rx_byte_valid,
     input  logic [7:0] rx_byte,
 
-    output logic                         req_valid,
-    input  logic                         req_accept,
-    output rtl_pkg::reg_wr_kind_t        req_kind,
+    output logic                  req_valid,
+    input  logic                  req_accept,
+    output rtl_pkg::reg_wr_kind_t req_kind,
 
-    output logic                         control_start_exp,
-    output logic                         control_soft_reset,
-    output logic [31:0]                  reset_wait_cycles_data,
+    output logic                          control_start_exp,
+    output logic                          control_soft_reset,
+    output logic                          control_read_all,
+    output logic [31:0]                   reset_wait_cycles_data,
 
     output logic [rtl_pkg::PlayCfgAw-1:0] play_cfg_addr,
     output rtl_pkg::play_cfg_t            play_cfg_data,
@@ -91,101 +92,90 @@ module write_reg_rx (
         RxStateWaitAccept    = 6'd46
     } rx_state_t;
 
-    rx_state_t      state_r;
-    reg_wr_kind_t   req_kind_r;
+    rx_state_t state_r;
 
-    logic                  control_start_exp_r;
-    logic                  control_soft_reset_r;
-    logic [31:0]           reset_wait_cycles_data_r;
+    reg_wr_kind_t req_kind_r;
 
-    logic [PlayCfgAw-1:0]  play_cfg_addr_r;
-    play_cfg_t             play_cfg_data_r;
+    logic control_start_exp_r;
+    logic control_soft_reset_r;
+    logic control_read_all_r;
+    logic [31:0] reset_wait_cycles_data_r;
 
-    logic [MeasCfgAw-1:0]  measure_cfg_addr_r;
-    measure_cfg_t          measure_cfg_data_r;
+    logic [PlayCfgAw-1:0] play_cfg_addr_r;
+    play_cfg_t            play_cfg_data_r;
 
-    logic [InstrAw-1:0]    instr_addr_r;
-    instr_t                instr_data_r;
-    logic [31:0]           instr_word_r;
+    logic [MeasCfgAw-1:0] measure_cfg_addr_r;
+    measure_cfg_t         measure_cfg_data_r;
 
-    function automatic rx_state_t sync_recover_state(input logic [7:0] data_byte);
-        if (data_byte == RegWrSync0) begin
-            sync_recover_state = RxStateSync1;
-        end else begin
-            sync_recover_state = RxStateSync0;
-        end
-    endfunction
+    logic [InstrAw-1:0]   instr_addr_r;
+    instr_t               instr_data_r;
+    logic [31:0]          instr_word_r;
 
     always_ff @(posedge clk) begin
         if (!rst_sync_n) begin
             state_r                  <= RxStateSync0;
             req_valid                <= 1'b0;
             req_kind_r               <= REG_WR_KIND_NONE;
-
             control_start_exp_r      <= 1'b0;
             control_soft_reset_r     <= 1'b0;
+            control_read_all_r       <= 1'b0;
             reset_wait_cycles_data_r <= '0;
-
             play_cfg_addr_r          <= '0;
             play_cfg_data_r          <= '0;
-
             measure_cfg_addr_r       <= '0;
             measure_cfg_data_r       <= '0;
-
             instr_addr_r             <= '0;
             instr_data_r             <= '0;
             instr_word_r             <= '0;
         end else begin
-            if (!enable) begin
-                state_r    <= RxStateSync0;
+            if (req_valid && req_accept) begin
                 req_valid  <= 1'b0;
                 req_kind_r <= REG_WR_KIND_NONE;
-            end else begin
-                if (req_valid) begin
-                    if (req_accept) begin
-                        req_valid  <= 1'b0;
-                        req_kind_r <= REG_WR_KIND_NONE;
-                        state_r    <= RxStateSync0;
-                    end
+                state_r    <= RxStateSync0;
+            end else if (!req_valid) begin
+                if (!enable) begin
+                    state_r <= RxStateSync0;
                 end else begin
-                    case (state_r)
-                        RxStateSync0: begin
-                            if (rx_byte_valid && (rx_byte == RegWrSync0)) begin
+                    unique case (state_r)
+                        RxStateSync0: if (rx_byte_valid && (rx_byte == RegWrSync0)) begin
+                            state_r <= RxStateSync1;
+                        end
+
+                        RxStateSync1: if (rx_byte_valid) begin
+                            if (rx_byte == RegWrSync1) begin
+                                state_r <= RxStateType;
+                            end else if (rx_byte == RegWrSync0) begin
                                 state_r <= RxStateSync1;
+                            end else begin
+                                state_r <= RxStateSync0;
                             end
                         end
 
-                        RxStateSync1: begin
-                            if (rx_byte_valid) begin
-                                if (rx_byte == RegWrSync1) begin
-                                    state_r <= RxStateType;
-                                end else begin
-                                    state_r <= sync_recover_state(rx_byte);
-                                end
-                            end
+                        RxStateType: if (rx_byte_valid) begin
+                            control_start_exp_r <= 1'b0;
+                            control_soft_reset_r <= 1'b0;
+                            control_read_all_r <= 1'b0;
+                            play_cfg_data_r <= '0;
+                            measure_cfg_data_r <= '0;
+                            instr_word_r <= '0;
+
+                            unique case (rx_byte)
+                                RegWrTypeControl:    state_r <= RxStateControlFlags;
+                                RegWrTypeResetWait:  state_r <= RxStateResetWait0;
+                                RegWrTypePlayCfg:    state_r <= RxStatePlayAddr;
+                                RegWrTypeMeasureCfg: state_r <= RxStateMeasAddr;
+                                RegWrTypeInstr:      state_r <= RxStateInstrAddr;
+                                default:             state_r <= RxStateSync0;
+                            endcase
                         end
 
-                        RxStateType: begin
-                            if (rx_byte_valid) begin
-                                unique case (rx_byte)
-                                    RegWrTypeControl:    state_r <= RxStateControlFlags;
-                                    RegWrTypeResetWait:  state_r <= RxStateResetWait0;
-                                    RegWrTypePlayCfg:    state_r <= RxStatePlayAddr;
-                                    RegWrTypeMeasureCfg: state_r <= RxStateMeasAddr;
-                                    RegWrTypeInstr:      state_r <= RxStateInstrAddr;
-                                    default:             state_r <= sync_recover_state(rx_byte);
-                                endcase
-                            end
-                        end
-
-                        RxStateControlFlags: begin
-                            if (rx_byte_valid) begin
-                                control_start_exp_r <= rx_byte[RegWrControlBitStartExp];
-                                control_soft_reset_r <= rx_byte[RegWrControlBitSoftReset];
-                                req_kind_r <= REG_WR_KIND_CONTROL;
-                                req_valid  <= 1'b1;
-                                state_r    <= RxStateWaitAccept;
-                            end
+                        RxStateControlFlags: if (rx_byte_valid) begin
+                            control_start_exp_r <= rx_byte[RegWrControlBitStartExp];
+                            control_soft_reset_r <= rx_byte[RegWrControlBitSoftReset];
+                            control_read_all_r <= rx_byte[RegWrControlBitReadAll];
+                            req_kind_r <= REG_WR_KIND_CONTROL;
+                            req_valid  <= 1'b1;
+                            state_r    <= RxStateWaitAccept;
                         end
 
                         RxStateResetWait0: if (rx_byte_valid) begin
@@ -425,6 +415,7 @@ module write_reg_rx (
 
     assign control_start_exp      = control_start_exp_r;
     assign control_soft_reset     = control_soft_reset_r;
+    assign control_read_all       = control_read_all_r;
     assign reset_wait_cycles_data = reset_wait_cycles_data_r;
 
     assign play_cfg_addr          = play_cfg_addr_r;

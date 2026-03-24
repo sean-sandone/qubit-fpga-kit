@@ -11,6 +11,7 @@ import json
 import time
 import struct
 import math
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -31,6 +32,11 @@ Q2_14FracBits = 14
 Q2_14Scale = 1 << Q2_14FracBits
 Q2_14MinFloat = -2.0
 Q2_14MaxFloat = (32767.0 / float(Q2_14Scale))  # 1.99993896484375
+
+RegDumpSync0 = 0xD4
+RegDumpSync1 = 0x4D
+RegDumpType = 0x20
+RegDumpRecordLen = 9
 
 
 def _ts() -> str:
@@ -405,22 +411,235 @@ def _format_clip_warning(clip_info: Dict[str, Any], n_samples: int) -> str:
     ]
 
     if clip_info["first_i_clip_idx"] is not None:
-        parts.append(
-            f'first_i_clip_idx={clip_info["first_i_clip_idx"]}'
-        )
-        parts.append(
-            f'first_i_clip_val={clip_info["first_i_clip_val"]:.6f}'
-        )
+        parts.append(f'first_i_clip_idx={clip_info["first_i_clip_idx"]}')
+        parts.append(f'first_i_clip_val={clip_info["first_i_clip_val"]:.6f}')
 
     if clip_info["first_q_clip_idx"] is not None:
-        parts.append(
-            f'first_q_clip_idx={clip_info["first_q_clip_idx"]}'
-        )
-        parts.append(
-            f'first_q_clip_val={clip_info["first_q_clip_val"]:.6f}'
-        )
+        parts.append(f'first_q_clip_idx={clip_info["first_q_clip_idx"]}')
+        parts.append(f'first_q_clip_val={clip_info["first_q_clip_val"]:.6f}')
 
     return " ".join(parts)
+
+
+def _process_rx_text_line(
+    rx_text: str,
+    *,
+    fpga: VirtualFPGA,
+    sim: QubitSim,
+    ser,
+    debug: bool,
+    log_path: Optional[Path],
+) -> None:
+    if not rx_text:
+        return
+
+    _debug_log(f"RX {rx_text}", debug=debug, log_path=log_path)
+
+    try:
+        obj = json.loads(rx_text)
+    except Exception as e:
+        resp = {"ok": False, "err": str(e)}
+        tx_text = json.dumps(resp)
+
+        if debug:
+            _debug_log(f"INFO {tx_text}", debug=True, log_path=None)
+
+        if log_path is not None:
+            _debug_log(f"INFO {tx_text}", debug=False, log_path=log_path)
+
+        return
+
+    cmd = str(obj.get("cmd", "")).upper()
+
+    if cmd == "DEBUG":
+        debug_line = _format_debug_measure_info(obj)
+
+        if debug:
+            _debug_log(debug_line, debug=True, log_path=None)
+
+        if log_path is not None:
+            _debug_log(debug_line, debug=False, log_path=log_path)
+
+        return
+
+    try:
+        resp = handle_cmd(obj, fpga, sim)
+    except Exception as e:
+        resp = {"ok": False, "err": str(e)}
+
+    if resp.get("ok") and ("I" in resp) and ("Q" in resp):
+        tx_summary = _build_tx_terminal_summary(resp)
+
+        if debug:
+            _debug_log(tx_summary, debug=True, log_path=None)
+
+        if log_path is not None:
+            _debug_log(tx_summary, debug=False, log_path=log_path)
+
+        try:
+            pkt, clip_info = build_waveform_packet(resp["I"], resp["Q"])
+        except Exception as e:
+            err_resp = {"ok": False, "err": f"waveform packet build failed: {e}"}
+            tx_text = json.dumps(err_resp)
+
+            if debug:
+                _debug_log(f"INFO {tx_text}", debug=True, log_path=None)
+
+            if log_path is not None:
+                _debug_log(f"INFO {tx_text}", debug=False, log_path=log_path)
+
+            return
+
+        if clip_info.get("any_clipped", False):
+            warn_line = _format_clip_warning(clip_info, int(resp.get("n", len(resp["I"]))))
+
+            if debug:
+                _debug_log(warn_line, debug=True, log_path=None)
+
+            if log_path is not None:
+                _debug_log(warn_line, debug=False, log_path=log_path)
+
+        bin_hex = pkt.hex(" ")
+        if debug:
+            _debug_log(
+                f"TX_BIN bytes={len(pkt)} sync=A5 5A type=02 n={pkt[3]} fmt=Q2.14",
+                debug=True,
+                log_path=None,
+            )
+            _debug_log(f"TX_BIN_HEX {bin_hex}", debug=True, log_path=None)
+
+        if log_path is not None:
+            _debug_log(
+                f"TX_BIN bytes={len(pkt)} sync=A5 5A type=02 n={pkt[3]} fmt=Q2.14",
+                debug=False,
+                log_path=log_path,
+            )
+
+        ser.write(pkt)
+        ser.flush()
+        return
+
+    if cmd == "RESET":
+        tx_text = json.dumps(resp)
+
+        if debug:
+            _debug_log(f"TX {tx_text}", debug=True, log_path=None)
+
+        if log_path is not None:
+            _debug_log(f"TX {tx_text}", debug=False, log_path=log_path)
+
+        ser.write((tx_text + "\n").encode("utf-8"))
+        ser.flush()
+        return
+
+    tx_text = json.dumps(resp)
+
+    if debug:
+        _debug_log(f"INFO {tx_text}", debug=True, log_path=None)
+
+    if log_path is not None:
+        _debug_log(f"INFO {tx_text}", debug=False, log_path=log_path)
+
+
+class _MixedRxParser:
+    def __init__(self, menu: UartMenu, *, debug: bool, log_path: Optional[Path], ui_app=None):
+        self.menu = menu
+        self.debug = debug
+        self.log_path = log_path
+        self.ui_app = ui_app
+        self._text_buf = bytearray()
+        self._dump_sync_buf = bytearray()
+        self._dump_record_buf = bytearray()
+        self._fpga = None
+        self._sim = None
+        self._ser = None
+
+    def bind_runtime(self, *, fpga: VirtualFPGA, sim: QubitSim, ser) -> None:
+        self._fpga = fpga
+        self._sim = sim
+        self._ser = ser
+
+    def feed(self, data: bytes) -> None:
+        for b in data:
+            self._feed_byte(b)
+
+    def _feed_byte(self, b: int) -> None:
+        if self._dump_record_buf:
+            self._dump_record_buf.append(b)
+            if len(self._dump_record_buf) == RegDumpRecordLen:
+                record = bytes(self._dump_record_buf)
+                self._dump_record_buf.clear()
+
+                if self.debug:
+                    _debug_log(
+                        f"RX_DUMP bytes={len(record)} hex={record.hex(' ')}",
+                        debug=True,
+                        log_path=None,
+                    )
+
+                if self.log_path is not None:
+                    _debug_log(
+                        f"RX_DUMP bytes={len(record)} hex={record.hex(' ')}",
+                        debug=False,
+                        log_path=self.log_path,
+                    )
+
+                shadow = self.menu.ingest_dump_record(record)
+                if shadow is not None:
+                    if self.debug:
+                        _debug_log(
+                            f"RX_DUMP_COMPLETE records={shadow.last_dump_record_count}",
+                            debug=True,
+                            log_path=None,
+                        )
+
+                    if self.log_path is not None:
+                        _debug_log(
+                            f"RX_DUMP_COMPLETE records={shadow.last_dump_record_count}",
+                            debug=False,
+                            log_path=self.log_path,
+                        )
+
+                    if self.ui_app is not None:
+                        self.ui_app.load_from_shadow(self.menu)
+            return
+
+        if self._dump_sync_buf:
+            self._dump_sync_buf.append(b)
+
+            if len(self._dump_sync_buf) == 2:
+                if self._dump_sync_buf[1] != RegDumpSync1:
+                    self._dump_sync_buf.clear()
+                return
+
+            if len(self._dump_sync_buf) == 3:
+                if self._dump_sync_buf[2] == RegDumpType:
+                    self._dump_record_buf = bytearray(self._dump_sync_buf)
+                self._dump_sync_buf.clear()
+                return
+
+        if b == RegDumpSync0:
+            self._dump_sync_buf = bytearray([b])
+            return
+
+        if b == 0x0D:
+            return
+
+        if b == 0x0A:
+            rx_text = self._text_buf.decode("utf-8", errors="replace").strip()
+            self._text_buf.clear()
+            if rx_text:
+                _process_rx_text_line(
+                    rx_text,
+                    fpga=self._fpga,
+                    sim=self._sim,
+                    ser=self._ser,
+                    debug=self.debug,
+                    log_path=self.log_path,
+                )
+            return
+
+        self._text_buf.append(b)
 
 
 def run_uart_server(
@@ -432,6 +651,7 @@ def run_uart_server(
     timeout_s: float = 0.2,
     debug: bool = False,
     log_file: str | None = None,
+    ui_app=None,
 ):
     fpga = VirtualFPGA(fs_hz=fs_hz, if_hz=if_hz)
     sim = QubitSim(seed=1, omega_max_hz=omega_max_hz)
@@ -471,6 +691,22 @@ def run_uart_server(
 
         menu = UartMenu(_send_host_packet)
 
+        if ui_app is not None:
+            ui_app.attach_menu(menu)
+
+        def _on_dump_complete(_shadow) -> None:
+            if ui_app is not None:
+                ui_app.load_from_shadow(menu)
+
+        menu.set_dump_complete_callback(_on_dump_complete)
+
+        parser = _MixedRxParser(menu, debug=debug, log_path=log_path, ui_app=ui_app)
+        parser.bind_runtime(fpga=fpga, sim=sim, ser=ser)
+
+        # FPGA is the source of truth now.
+        # On startup, request a full dump instead of loading local defaults.
+        menu.request_register_dump()
+
         print("(m) for menu", flush=True)
 
         while True:
@@ -481,178 +717,26 @@ def run_uart_server(
                 print()
                 print("(m) for menu", flush=True)
 
-            line = ser.readline()
-            if not line:
+            n_waiting = ser.in_waiting
+            chunk = ser.read(n_waiting if n_waiting > 0 else 1)
+            if not chunk:
                 continue
 
-            rx_text = line.decode("utf-8", errors="replace").strip()
-            _debug_log(f"RX {rx_text}", debug=debug, log_path=log_path)
+            parser.feed(chunk)
 
-            try:
-                obj = json.loads(rx_text)
-            except Exception as e:
-                resp = {"ok": False, "err": str(e)}
-
-                tx_text = json.dumps(resp)
-
-                if debug:
-                    _debug_log(
-                        f"INFO {tx_text}",
-                        debug=True,
-                        log_path=None,
-                    )
-
-                if log_path is not None:
-                    _debug_log(
-                        f"INFO {tx_text}",
-                        debug=False,
-                        log_path=log_path,
-                    )
-
-                continue
-
-            cmd = str(obj.get("cmd", "")).upper()
-
-            if cmd == "DEBUG":
-                debug_line = _format_debug_measure_info(obj)
-
-                if debug:
-                    _debug_log(
-                        debug_line,
-                        debug=True,
-                        log_path=None,
-                    )
-
-                if log_path is not None:
-                    _debug_log(
-                        debug_line,
-                        debug=False,
-                        log_path=log_path,
-                    )
-
-                continue
-
-            try:
-                resp = handle_cmd(obj, fpga, sim)
-            except Exception as e:
-                resp = {"ok": False, "err": str(e)}
-
-            if resp.get("ok") and isinstance(resp.get("I"), list) and isinstance(resp.get("Q"), list):
-                # Terminal: compact summary
-                if debug:
-                    _debug_log(
-                        _build_tx_terminal_summary(resp),
-                        debug=True,
-                        log_path=None,
-                    )
-
-                # File: full JSON for debugging
-                if log_path is not None:
-                    _debug_log(
-                        f"TX {json.dumps(resp)}",
-                        debug=False,
-                        log_path=log_path,
-                    )
-
-                # Binary packet to FPGA, with signed Q2.14 payload
-                tx_packet, clip_info = build_waveform_packet(resp["I"], resp["Q"])
-
-                if clip_info["any_clipped"]:
-                    clip_msg = _format_clip_warning(clip_info, int(resp["n"]))
-
-                    if debug:
-                        _debug_log(
-                            clip_msg,
-                            debug=True,
-                            log_path=None,
-                        )
-
-                    if log_path is not None:
-                        _debug_log(
-                            clip_msg,
-                            debug=False,
-                            log_path=log_path,
-                        )
-
-                # File: exact binary payload as hex
-                if log_path is not None:
-                    hex_dump = tx_packet.hex(" ")
-                    _debug_log(
-                        f"TX_BIN_HEX {hex_dump}",
-                        debug=False,
-                        log_path=log_path,
-                    )
-
-                ser.write(tx_packet)
-                ser.flush()
-
-                if debug:
-                    _debug_log(
-                        f"TX_BIN bytes={len(tx_packet)} sync=A5 5A type=02 n={resp['n']} fmt=Q2.14",
-                        debug=True,
-                        log_path=None,
-                    )
-
-                if log_path is not None:
-                    _debug_log(
-                        f"TX_BIN bytes={len(tx_packet)} sync=A5 5A type=02 n={resp['n']} fmt=Q2.14",
-                        debug=False,
-                        log_path=log_path,
-                    )
-
-            elif resp.get("ok") and resp.get("msg") == "PONG":
-                # Only PING response is transmitted as JSON text
-                tx_text = json.dumps(resp)
-
-                if debug:
-                    _debug_log(
-                        f"TX {tx_text}",
-                        debug=True,
-                        log_path=None,
-                    )
-
-                if log_path is not None:
-                    _debug_log(
-                        f"TX {tx_text}",
-                        debug=False,
-                        log_path=log_path,
-                    )
-
-                ser.write((tx_text + "\n").encode("utf-8"))
-                ser.flush()
-
-            else:
-                # All other responses are log-only
-                tx_text = json.dumps(resp)
-
-                if debug:
-                    _debug_log(
-                        f"INFO {tx_text}",
-                        debug=True,
-                        log_path=None,
-                    )
-
-                if log_path is not None:
-                    _debug_log(
-                        f"INFO {tx_text}",
-                        debug=False,
-                        log_path=log_path,
-                    )
-
-
-if __name__ == "__main__":
+def _main() -> None:
     import argparse
 
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--port", required=True, help="COM3, COM4, /dev/ttyUSB0, etc")
-    ap.add_argument("--baud", type=int, default=115200)
-    ap.add_argument("--fs_hz", type=float, default=250e6)
-    ap.add_argument("--if_hz", type=float, default=50e6)
-    ap.add_argument("--omega_max_hz", type=float, default=2e6)
-    ap.add_argument("--timeout_s", type=float, default=0.2)
-    ap.add_argument("--debug", action="store_true", help="Print RX/TX debug info to terminal")
-    ap.add_argument("--log_file", default=None, help="Optional log file path")
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(description="Run the quantum FPGA UART server")
+    parser.add_argument("--port", required=True, help="Serial port, for example COM6")
+    parser.add_argument("--baud", type=int, default=115200, help="UART baud rate")
+    parser.add_argument("--fs_hz", type=float, default=250e6, help="Virtual FPGA sample rate")
+    parser.add_argument("--if_hz", type=float, default=50e6, help="Digital Intermediate Frequency used when rendering simulated FPGA waveforms")
+    parser.add_argument("--omega_max_hz", type=float, default=2e6, help="QubitSim max drive rate")
+    parser.add_argument("--timeout_s", type=float, default=0.2, help="Serial read timeout in seconds")
+    parser.add_argument("--debug", action="store_true", help="Enable terminal debug logging")
+    parser.add_argument("--log_file", default=None, help="Optional log file path")
+    args = parser.parse_args()
 
     run_uart_server(
         port=args.port,
@@ -664,3 +748,7 @@ if __name__ == "__main__":
         debug=args.debug,
         log_file=args.log_file,
     )
+
+
+if __name__ == "__main__":
+    _main()

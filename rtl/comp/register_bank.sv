@@ -18,6 +18,7 @@ module register_bank (
     input  logic wr_control,
     input  logic control_start_exp_in,
     input  logic control_soft_reset_in,
+    input  logic control_read_all_in,
 
     // ============================================================
     // Reset-wait register write interface
@@ -82,6 +83,22 @@ module register_bank (
     output rtl_pkg::measure_cfg_t         rd_measure_cfg_data,
 
     // ============================================================
+    // Dump read interfaces
+    // ============================================================
+
+    input  logic [rtl_pkg::InstrAw-1:0]   dump_rd_instr_addr,
+    output rtl_pkg::instr_t               dump_rd_instr_data,
+    output logic                          dump_rd_instr_valid,
+
+    input  logic [rtl_pkg::PlayCfgAw-1:0] dump_rd_play_cfg_addr,
+    output rtl_pkg::play_cfg_t            dump_rd_play_cfg_data,
+    output logic                          dump_rd_play_cfg_valid,
+
+    input  logic [rtl_pkg::MeasCfgAw-1:0] dump_rd_measure_cfg_addr,
+    output rtl_pkg::measure_cfg_t         dump_rd_measure_cfg_data,
+    output logic                          dump_rd_measure_cfg_valid,
+
+    // ============================================================
     // Sequencer / status handshake
     // ============================================================
 
@@ -95,6 +112,7 @@ module register_bank (
 
     output logic start_exp,
     output logic soft_reset_req,
+    output logic read_all_pulse,
     output logic [31:0] reset_wait_cycles,
 
     output logic play_cfg_any_valid,
@@ -146,6 +164,7 @@ module register_bank (
 
     logic        start_exp_r;
     logic        soft_reset_req_r;
+    logic        read_all_pulse_r;
     logic        seq_done_sticky_r;
     logic [31:0] reset_wait_cycles_r;
 
@@ -176,6 +195,10 @@ module register_bank (
     measure_cfg_t rd_measure_cfg_data_r;
     instr_t       rd_instr_data_r;
 
+    play_cfg_t    dump_rd_play_cfg_data_r;
+    measure_cfg_t dump_rd_measure_cfg_data_r;
+    instr_t       dump_rd_instr_data_r;
+
     integer i;
 
     // ============================================================
@@ -186,6 +209,7 @@ module register_bank (
         if (!rst_sync_n) begin
             start_exp_r               <= 1'b0;
             soft_reset_req_r          <= 1'b0;
+            read_all_pulse_r          <= 1'b0;
             seq_done_sticky_r         <= 1'b0;
             reset_wait_cycles_r       <= 32'd0;
 
@@ -224,6 +248,7 @@ module register_bank (
             end
         end else begin
             soft_reset_req_r         <= 1'b0;
+            read_all_pulse_r         <= 1'b0;
             cal_debug_update_pulse_r <= 1'b0;
 
             if (wr_control) begin
@@ -234,6 +259,10 @@ module register_bank (
 
                 if (control_soft_reset_in) begin
                     soft_reset_req_r <= 1'b1;
+                end
+
+                if (control_read_all_in) begin
+                    read_all_pulse_r <= 1'b1;
                 end
             end
 
@@ -332,9 +361,13 @@ module register_bank (
     // ============================================================
 
     always_comb begin
-        rd_instr_data_r       = instr_mem_r[rd_instr_addr];
-        rd_play_cfg_data_r    = play_cfg_mem_r[rd_play_cfg_addr];
-        rd_measure_cfg_data_r = measure_cfg_mem_r[rd_measure_cfg_addr];
+        rd_instr_data_r            = instr_mem_r[rd_instr_addr];
+        rd_play_cfg_data_r         = play_cfg_mem_r[rd_play_cfg_addr];
+        rd_measure_cfg_data_r      = measure_cfg_mem_r[rd_measure_cfg_addr];
+
+        dump_rd_instr_data_r       = instr_mem_r[dump_rd_instr_addr];
+        dump_rd_play_cfg_data_r    = play_cfg_mem_r[dump_rd_play_cfg_addr];
+        dump_rd_measure_cfg_data_r = measure_cfg_mem_r[dump_rd_measure_cfg_addr];
     end
 
     // ============================================================
@@ -345,8 +378,16 @@ module register_bank (
     assign rd_play_cfg_data    = rd_play_cfg_data_r;
     assign rd_measure_cfg_data = rd_measure_cfg_data_r;
 
+    assign dump_rd_instr_data        = dump_rd_instr_data_r;
+    assign dump_rd_instr_valid       = instr_valid_r[dump_rd_instr_addr];
+    assign dump_rd_play_cfg_data     = dump_rd_play_cfg_data_r;
+    assign dump_rd_play_cfg_valid    = play_cfg_valid_r[dump_rd_play_cfg_addr];
+    assign dump_rd_measure_cfg_data  = dump_rd_measure_cfg_data_r;
+    assign dump_rd_measure_cfg_valid = measure_cfg_valid_r[dump_rd_measure_cfg_addr];
+
     assign start_exp         = start_exp_r;
     assign soft_reset_req    = soft_reset_req_r;
+    assign read_all_pulse    = read_all_pulse_r;
     assign reset_wait_cycles = reset_wait_cycles_r;
 
     assign play_cfg_any_valid    = |play_cfg_valid_r;
