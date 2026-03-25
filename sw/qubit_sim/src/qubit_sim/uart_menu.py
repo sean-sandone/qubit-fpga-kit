@@ -565,6 +565,34 @@ class UartMenu:
         print("READ_ALL TX  : C3 3C 10 [flags with bit2=1]")
         print("DUMP RX      : D4 4D 20 [group][index][u32 little-endian]")
 
+    def _print_instruction_help(self) -> None:
+        print()
+        print("Instruction entry help:")
+        print("  word format:")
+        print("    [31:28] opcode")
+        print("    [27:24] flags")
+        print("    [23:20] cfg")
+        print("    [19:00] operand")
+        print()
+        print("  accepted numeric input:")
+        print("    decimal: 25")
+        print("    hex    : 0x19")
+        print()
+        print("  field ranges:")
+        print("    opcode  : 0..15")
+        print("    flags   : 0..15")
+        print("    cfg     : 0..15")
+        print("    operand : 0..0xFFFFF")
+        print()
+        print("  LOOP operand format:")
+        print("    operand[19:8]        = loop_repeat_count")
+        print("    operand[7:0]         = loop_target_idx")
+        print("  examples:")
+        print("    operand decimal 64    -> 64")
+        print("    operand hex 0x40      -> 64")
+        print("    cfg decimal 3         -> field value 3")
+        print("    raw word 0x12345678   -> writes exact 32-bit instruction word")
+
     def _print_summary(self) -> None:
         print()
         print("Control / status:")
@@ -747,7 +775,10 @@ class UartMenu:
                 print(f"Error: {exc}")
 
     def _menu_instr(self) -> None:
-        idx_text = self._input_with_default(f"Instruction index [0..{InstrDepth - 1}]", "0")
+        idx_text = self._input_with_default(
+            f"Instruction index [0..{InstrDepth - 1}] (decimal or 0x...)",
+            "0",
+        )
         idx = self._parse_int(idx_text, 0)
         if idx < 0 or idx >= InstrDepth:
             print("Invalid index")
@@ -759,27 +790,53 @@ class UartMenu:
             print("  1. Enter raw 32-bit instruction word")
             print("  2. Build instruction from fields")
             print("  3. Send current local value for this index")
+            print("  4. Help: instruction field format and examples")
             print("  b. Back")
             sel = input("Select: ").strip().lower()
 
             try:
                 if sel == "1":
                     self.shadow.instr_words[idx] = self._parse_int(
-                        self._input_with_default("instr_word", self._hex_u32(self.shadow.instr_words[idx])),
+                        self._input_with_default(
+                            "instr_word (decimal or hex like 0x...)",
+                            self._hex_u32(self.shadow.instr_words[idx]),
+                        ),
                         self.shadow.instr_words[idx],
                     )
                     self.send_instr(idx)
                 elif sel == "2":
-                    opcode = self._parse_int(input("opcode (0..15): "), 0) & 0xF
-                    flags = self._parse_int(input("flags (0..15): "), 0) & 0xF
-                    cfg_index = self._parse_int(input("cfg_index (0..15): "), 0) & 0xF
-                    operand = self._parse_int(input("operand (0..0xFFFFF): "), 0) & 0xFFFFF
-                    word = (opcode << 28) | (flags << 24) | (cfg_index << 20) | operand
+                    print()
+                    print("Enter instruction fields using decimal like 12 or hex like 0xC.")
+                    print("Operand accepts decimal or 0x... and is stored in bits [19:0].")
+                    opcode = self._parse_int(input("opcode (0..15, decimal or 0x...): "), 0) & 0xF
+                    flags = self._parse_int(input("flags (0..15, decimal or 0x...): "), 0) & 0xF
+                    cfg = self._parse_int(input("cfg (0..15, decimal or 0x...): "), 0) & 0xF
+
+                    if opcode == 0xA:
+                        print("LOOP operand format:")
+                        print("  operand[19:8] = loop_repeat_count")
+                        print("  operand[7:0]  = loop_target_idx")
+                        loop_repeat_count = self._parse_int(
+                            input("loop_repeat_count (decimal or 0x..., range 0..0xFFF): "),
+                            0,
+                        ) & 0xFFF
+                        loop_target_idx = self._parse_int(
+                            input("loop_target_idx (decimal or 0x..., range 0..0xFF): "),
+                            0,
+                        ) & 0xFF
+                        operand = ((loop_repeat_count & 0xFFF) << 8) | (loop_target_idx & 0xFF)
+                    else:
+                        operand = self._parse_int(input("operand (decimal or 0x..., range 0..0xFFFFF): "), 0) & 0xFFFFF
+
+                    word = (opcode << 28) | (flags << 24) | (cfg << 20) | operand
                     self.shadow.instr_words[idx] = word
                     print(f"Encoded word = {self._hex_u32(word)}")
                     self.send_instr(idx)
                 elif sel == "3":
                     self.send_instr(idx)
+                elif sel == "4":
+                    self._print_instruction_help()
+                    self._pause()
                 elif sel == "b":
                     return
                 else:

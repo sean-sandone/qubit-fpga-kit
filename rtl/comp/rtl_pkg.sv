@@ -111,6 +111,19 @@ package rtl_pkg;
         logic [19:0] operand;
     } instr_t;
 
+    // operand usage by opcode
+    //
+    // OP_LOOP operand encoding:
+    //   operand[19:8]          = remaining loop count
+    //   operand[InstrAw-1:0]   = loop target instruction index
+    //
+    // Notes:
+    // - The loop body has already executed once before OP_LOOP is reached.
+    // - Therefore operand[19:8] is the number of additional repeats.
+    // - Total executions of the loop body = operand[19:8] + 1.
+    // - Only the low InstrAw bits are used for the target address.
+    //   With InstrDepth=32, InstrAw=5, so operand[4:0] is used.
+
     // ============================================================
     // Default init ROM support
     // ============================================================

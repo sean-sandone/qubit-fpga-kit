@@ -75,6 +75,12 @@ module instr_sequencer (
 
     logic [1:0]         cal_accum_store_sel_r;
 
+    logic [11:0]        loop_repeat_count;
+    logic [InstrAw-1:0] loop_target_idx;
+
+    assign loop_repeat_count = rd_instr_data.operand[19:8];
+    assign loop_target_idx   = rd_instr_data.operand[InstrAw-1:0];
+
     assign rd_instr_addr       = pc_r;
     assign rd_play_cfg_addr    = cfg_index_r[PlayCfgAw-1:0];
     assign rd_measure_cfg_addr = cfg_index_r[MeasCfgAw-1:0];
@@ -196,14 +202,22 @@ module instr_sequencer (
                             end
 
                             OP_LOOP: begin
+                                // OP_LOOP operand encoding:
+                                //   operand[19:8]          = additional repeat count
+                                //   operand[InstrAw-1:0]   = target instruction index
+                                //
+                                // Notes:
+                                // - The loop body executes once before OP_LOOP is reached.
+                                // - Therefore total executions = loop_repeat_count + 1.
+
                                 if (!loop_active_r) begin
-                                    if (rd_instr_data.operand[19:8] == 12'd0) begin
+                                    if (loop_repeat_count == 12'd0) begin
                                         pc_r <= pc_r + 1'b1;
                                     end else begin
                                         loop_active_r <= 1'b1;
-                                        loop_count_r  <= rd_instr_data.operand[19:8];
-                                        loop_target_r <= rd_instr_data.operand[InstrAw-1:0];
-                                        pc_r          <= rd_instr_data.operand[InstrAw-1:0];
+                                        loop_count_r  <= loop_repeat_count;
+                                        loop_target_r <= loop_target_idx;
+                                        pc_r          <= loop_target_idx;
                                     end
                                 end else if (loop_count_r > 12'd1) begin
                                     loop_count_r <= loop_count_r - 1'b1;

@@ -48,8 +48,11 @@ OpcodeNames = {
     0x4: 'END',
     0x5: 'JUMP',
     0x6: 'WAIT_RESET',
+    0x7: 'ACCUM_CLEAR',
+    0x8: 'ACCUM',
+    0x9: 'ACCUM_AVG',
+    0xA: 'LOOP',
 }
-
 
 @dataclass
 class PreviewImages:
