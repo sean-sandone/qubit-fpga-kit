@@ -17,6 +17,12 @@ module tx_arbiter (
     input  logic       formatter_busy,
     input  logic       formatter_done_pulse,
 
+    input  logic [7:0] dump_tx_data,
+    input  logic       dump_tx_valid,
+    output logic       dump_tx_ready,
+    input  logic       dump_busy,
+    input  logic       dump_done_pulse,
+
     input  logic [7:0] debug_tx_data,
     input  logic       debug_tx_valid,
     output logic       debug_tx_ready,
@@ -34,7 +40,8 @@ module tx_arbiter (
     typedef enum logic [1:0] {
         TxOwnerNone      = 2'd0,
         TxOwnerFormatter = 2'd1,
-        TxOwnerDebug     = 2'd2
+        TxOwnerDump      = 2'd2,
+        TxOwnerDebug     = 2'd3
     } tx_owner_t;
 
     tx_owner_t tx_owner_r;
@@ -47,6 +54,8 @@ module tx_arbiter (
                 TxOwnerNone: begin
                     if (formatter_busy) begin
                         tx_owner_r <= TxOwnerFormatter;
+                    end else if (dump_busy) begin
+                        tx_owner_r <= TxOwnerDump;
                     end else if (debug_busy) begin
                         tx_owner_r <= TxOwnerDebug;
                     end
@@ -54,6 +63,12 @@ module tx_arbiter (
 
                 TxOwnerFormatter: begin
                     if (formatter_done_pulse) begin
+                        tx_owner_r <= TxOwnerNone;
+                    end
+                end
+
+                TxOwnerDump: begin
+                    if (dump_done_pulse) begin
                         tx_owner_r <= TxOwnerNone;
                     end
                 end
@@ -71,12 +86,13 @@ module tx_arbiter (
         end
     end
 
-    assign debug_start = debug_pending && (tx_owner_r == TxOwnerNone);
+    assign debug_start = debug_pending && (tx_owner_r == TxOwnerNone) && !formatter_busy && !dump_busy;
 
     always_comb begin
         uart_tx_data       = 8'h00;
         uart_tx_valid      = 1'b0;
         formatter_tx_ready = 1'b0;
+        dump_tx_ready      = 1'b0;
         debug_tx_ready     = 1'b0;
 
         case (tx_owner_r)
@@ -84,6 +100,12 @@ module tx_arbiter (
                 uart_tx_data       = formatter_tx_data;
                 uart_tx_valid      = formatter_tx_valid;
                 formatter_tx_ready = uart_tx_ready;
+            end
+
+            TxOwnerDump: begin
+                uart_tx_data  = dump_tx_data;
+                uart_tx_valid = dump_tx_valid;
+                dump_tx_ready = uart_tx_ready;
             end
 
             TxOwnerDebug: begin

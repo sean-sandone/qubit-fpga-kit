@@ -111,6 +111,19 @@ package rtl_pkg;
         logic [19:0] operand;
     } instr_t;
 
+    // operand usage by opcode
+    //
+    // OP_LOOP operand encoding:
+    //   operand[19:8]          = remaining loop count
+    //   operand[InstrAw-1:0]   = loop target instruction index
+    //
+    // Notes:
+    // - The loop body has already executed once before OP_LOOP is reached.
+    // - Therefore operand[19:8] is the number of additional repeats.
+    // - Total executions of the loop body = operand[19:8] + 1.
+    // - Only the low InstrAw bits are used for the target address.
+    //   With InstrDepth=32, InstrAw=5, so operand[4:0] is used.
+
     // ============================================================
     // Default init ROM support
     // ============================================================
@@ -149,6 +162,32 @@ package rtl_pkg;
 
     localparam int unsigned RegWrControlBitStartExp  = 0;
     localparam int unsigned RegWrControlBitSoftReset = 1;
+    localparam int unsigned RegWrControlBitReadAll   = 2;
+
+    // ============================================================
+    // UART register dump packet constants
+    // ============================================================
+
+    localparam logic [7:0] RegDumpSync0 = 8'hD4;
+    localparam logic [7:0] RegDumpSync1 = 8'h4D;
+    localparam logic [7:0] RegDumpType  = 8'h20;
+
+    localparam logic [7:0] RegDumpGroupScalar     = 8'h00;
+    localparam logic [7:0] RegDumpGroupPlayCfg0   = 8'h10;
+    localparam logic [7:0] RegDumpGroupPlayCfg1   = 8'h11;
+    localparam logic [7:0] RegDumpGroupPlayCfg2   = 8'h12;
+    localparam logic [7:0] RegDumpGroupPlayCfg3   = 8'h13;
+    localparam logic [7:0] RegDumpGroupPlayCfg4   = 8'h14;
+    localparam logic [7:0] RegDumpGroupPlayCfg5   = 8'h15;
+    localparam logic [7:0] RegDumpGroupPlayValid  = 8'h16;
+    localparam logic [7:0] RegDumpGroupMeasCfg0   = 8'h20;
+    localparam logic [7:0] RegDumpGroupMeasCfg1   = 8'h21;
+    localparam logic [7:0] RegDumpGroupMeasCfg2   = 8'h22;
+    localparam logic [7:0] RegDumpGroupMeasValid  = 8'h23;
+    localparam logic [7:0] RegDumpGroupInstr      = 8'h30;
+    localparam logic [7:0] RegDumpGroupInstrValid = 8'h31;
+
+    localparam int unsigned RegDumpScalarCount = 21;
 
     // ============================================================
     // Legacy demo constant

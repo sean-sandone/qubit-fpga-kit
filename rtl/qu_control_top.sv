@@ -147,6 +147,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic                 init_wr_control;
     logic                 init_control_start_exp;
     logic                 init_control_soft_reset;
+    logic                 init_control_read_all;
 
     logic                 init_wr_reset_wait_cycles;
     logic [31:0]          init_wr_reset_wait_cycles_data;
@@ -216,12 +217,25 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic [MeasCfgAw-1:0] rd_measure_cfg_addr;
     measure_cfg_t         rd_measure_cfg_data;
 
+    logic [InstrAw-1:0]   dump_rd_instr_addr;
+    instr_t               dump_rd_instr_data;
+    logic                 dump_rd_instr_valid;
+
+    logic [PlayCfgAw-1:0] dump_rd_play_cfg_addr;
+    play_cfg_t            dump_rd_play_cfg_data;
+    logic                 dump_rd_play_cfg_valid;
+
+    logic [MeasCfgAw-1:0] dump_rd_measure_cfg_addr;
+    measure_cfg_t         dump_rd_measure_cfg_data;
+    logic                 dump_rd_measure_cfg_valid;
+
     // ============================================================
     // Register bank status / control
     // ============================================================
 
     logic        start_exp;
     logic        soft_reset_req;
+    logic        read_all_pulse;
     logic [31:0] reset_wait_cycles;
 
     logic play_cfg_any_valid;
@@ -237,6 +251,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic start_sequencer;
 
     assign start_sequencer = start_exp | init_done_pulse;
+    assign init_control_read_all = 1'b0;
 
     // ============================================================
     // Calibration results / registers
@@ -278,8 +293,6 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     assign clear_meas_state_valid = measure_start;
     assign clear_start_exp = seq_busy;
 
-
-
     // ============================================================
     // Register write arbitration
     // ============================================================
@@ -287,6 +300,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic                 arb_wr_control;
     logic                 arb_control_start_exp;
     logic                 arb_control_soft_reset;
+    logic                 arb_control_read_all;
 
     logic                 arb_wr_reset_wait_cycles;
     logic [31:0]          arb_wr_reset_wait_cycles_data;
@@ -308,6 +322,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     reg_wr_kind_t         uart_reg_wr_req_kind;
     logic                 uart_reg_wr_control_start_exp;
     logic                 uart_reg_wr_control_soft_reset;
+    logic                 uart_reg_wr_control_read_all;
     logic [31:0]          uart_reg_wr_reset_wait_cycles_data;
     logic [PlayCfgAw-1:0] uart_reg_wr_play_cfg_addr;
     play_cfg_t            uart_reg_wr_play_cfg_data;
@@ -327,6 +342,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .wr_control            (arb_wr_control),
         .control_start_exp_in  (arb_control_start_exp),
         .control_soft_reset_in (arb_control_soft_reset),
+        .control_read_all_in   (arb_control_read_all),
 
         .wr_reset_wait_cycles      (arb_wr_reset_wait_cycles),
         .wr_reset_wait_cycles_data (arb_wr_reset_wait_cycles_data),
@@ -362,12 +378,25 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .rd_measure_cfg_addr   (rd_measure_cfg_addr),
         .rd_measure_cfg_data   (rd_measure_cfg_data),
 
+        .dump_rd_instr_addr       (dump_rd_instr_addr),
+        .dump_rd_instr_data       (dump_rd_instr_data),
+        .dump_rd_instr_valid      (dump_rd_instr_valid),
+
+        .dump_rd_play_cfg_addr    (dump_rd_play_cfg_addr),
+        .dump_rd_play_cfg_data    (dump_rd_play_cfg_data),
+        .dump_rd_play_cfg_valid   (dump_rd_play_cfg_valid),
+
+        .dump_rd_measure_cfg_addr (dump_rd_measure_cfg_addr),
+        .dump_rd_measure_cfg_data (dump_rd_measure_cfg_data),
+        .dump_rd_measure_cfg_valid(dump_rd_measure_cfg_valid),
+
         .seq_busy_in           (seq_busy),
         .seq_done_pulse_in     (seq_done_pulse_in),
         .clear_start_exp       (clear_start_exp),
 
         .start_exp             (start_exp),
         .soft_reset_req        (soft_reset_req),
+        .read_all_pulse        (read_all_pulse),
         .reset_wait_cycles     (reset_wait_cycles),
 
         .play_cfg_any_valid    (play_cfg_any_valid),
@@ -417,6 +446,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .control_start_exp      (uart_reg_wr_control_start_exp),
         .control_soft_reset     (uart_reg_wr_control_soft_reset),
+        .control_read_all       (uart_reg_wr_control_read_all),
         .reset_wait_cycles_data (uart_reg_wr_reset_wait_cycles_data),
 
         .play_cfg_addr          (uart_reg_wr_play_cfg_addr),
@@ -440,6 +470,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .init_wr_control             (init_wr_control),
         .init_control_start_exp      (init_control_start_exp),
         .init_control_soft_reset     (init_control_soft_reset),
+        .init_control_read_all       (init_control_read_all),
 
         .init_wr_reset_wait_cycles   (init_wr_reset_wait_cycles),
         .init_wr_reset_wait_cycles_data(init_wr_reset_wait_cycles_data),
@@ -462,6 +493,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
 
         .uart_control_start_exp      (uart_reg_wr_control_start_exp),
         .uart_control_soft_reset     (uart_reg_wr_control_soft_reset),
+        .uart_control_read_all       (uart_reg_wr_control_read_all),
         .uart_reset_wait_cycles_data (uart_reg_wr_reset_wait_cycles_data),
 
         .uart_play_cfg_addr          (uart_reg_wr_play_cfg_addr),
@@ -476,6 +508,7 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .arb_wr_control              (arb_wr_control),
         .arb_control_start_exp       (arb_control_start_exp),
         .arb_control_soft_reset      (arb_control_soft_reset),
+        .arb_control_read_all        (arb_control_read_all),
 
         .arb_wr_reset_wait_cycles    (arb_wr_reset_wait_cycles),
         .arb_wr_reset_wait_cycles_data(arb_wr_reset_wait_cycles_data),
@@ -524,6 +557,16 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
     logic [7:0]         measure_rsp_sample_count;
     logic signed [15:0] measure_i_avg;
     logic signed [15:0] measure_q_avg;
+
+    // ============================================================
+    // Register dump UART source
+    // ============================================================
+
+    logic [7:0] dump_tx_data;
+    logic       dump_tx_valid;
+    logic       dump_tx_ready;
+    logic       dump_busy;
+    logic       dump_done_pulse;
 
     // ============================================================
     // Debug UART source
@@ -581,6 +624,12 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .formatter_busy      (formatter_busy),
         .formatter_done_pulse(formatter_done_pulse),
 
+        .dump_tx_data        (dump_tx_data),
+        .dump_tx_valid       (dump_tx_valid),
+        .dump_tx_ready       (dump_tx_ready),
+        .dump_busy           (dump_busy),
+        .dump_done_pulse     (dump_done_pulse),
+
         .debug_tx_data       (debug_tx_data),
         .debug_tx_valid      (debug_tx_valid),
         .debug_tx_ready      (debug_tx_ready),
@@ -593,6 +642,60 @@ module qu_control_top #(  // Xilinx KCU105 Eval Board
         .uart_tx_data        (uart_tx_data),
         .uart_tx_valid       (uart_tx_valid),
         .uart_tx_ready       (uart_tx_ready)
+    );
+
+    // ============================================================
+    // Register dump formatter
+    // ============================================================
+
+    register_dump_tx u_register_dump_tx (
+        .clk                     (clk),
+        .rst_sync_n              (rst_sync_n),
+
+        .start                   (read_all_pulse),
+
+        .start_exp               (start_exp),
+        .soft_reset_req          (soft_reset_req),
+        .reset_wait_cycles       (reset_wait_cycles),
+        .play_cfg_any_valid      (play_cfg_any_valid),
+        .measure_cfg_any_valid   (measure_cfg_any_valid),
+        .instr_any_valid         (instr_any_valid),
+        .seq_busy                (seq_busy),
+        .seq_done_sticky         (seq_done_sticky),
+
+        .cal_sample_count        (reg_cal_sample_count),
+        .cal_i_avg               (reg_cal_i_avg),
+        .cal_q_avg               (reg_cal_q_avg),
+        .cal_i0_ref              (reg_cal_i0_ref),
+        .cal_q0_ref              (reg_cal_q0_ref),
+        .cal_i1_ref              (reg_cal_i1_ref),
+        .cal_q1_ref              (reg_cal_q1_ref),
+        .cal_i_threshold         (reg_cal_i_threshold),
+        .cal_state_polarity      (reg_cal_state_polarity),
+        .cal_i0q0_valid          (reg_cal_i0q0_valid),
+        .cal_i1q1_valid          (reg_cal_i1q1_valid),
+        .cal_threshold_valid     (reg_cal_threshold_valid),
+        .meas_state              (reg_meas_state),
+        .meas_state_valid        (reg_meas_state_valid),
+
+        .dump_rd_play_cfg_addr   (dump_rd_play_cfg_addr),
+        .dump_rd_play_cfg_data   (dump_rd_play_cfg_data),
+        .dump_rd_play_cfg_valid  (dump_rd_play_cfg_valid),
+
+        .dump_rd_measure_cfg_addr(dump_rd_measure_cfg_addr),
+        .dump_rd_measure_cfg_data(dump_rd_measure_cfg_data),
+        .dump_rd_measure_cfg_valid(dump_rd_measure_cfg_valid),
+
+        .dump_rd_instr_addr      (dump_rd_instr_addr),
+        .dump_rd_instr_data      (dump_rd_instr_data),
+        .dump_rd_instr_valid     (dump_rd_instr_valid),
+
+        .tx_data                 (dump_tx_data),
+        .tx_valid                (dump_tx_valid),
+        .tx_ready                (dump_tx_ready),
+
+        .busy                    (dump_busy),
+        .done_pulse              (dump_done_pulse)
     );
 
     // ============================================================
