@@ -9,8 +9,10 @@
 
 from __future__ import annotations
 
+import json
 import struct
 import sys
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
@@ -522,6 +524,113 @@ class UartMenu:
         return self.shadow
 
     # -------------------------------------------------------------------------
+    # JSON file helpers
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_json_path(path_text: str) -> Path:
+        path = Path(str(path_text).strip()).expanduser()
+        if not path.suffix:
+            path = path.with_suffix(".json")
+        return path
+
+    @staticmethod
+    def _play_cfg_to_dict(cfg: PlayCfg) -> Dict[str, int | str]:
+        return {
+            "amp_q8_8": int(cfg.amp_q8_8),
+            "phase_q8_8": int(cfg.phase_q8_8),
+            "duration_ns": int(cfg.duration_ns),
+            "sigma_ns": int(cfg.sigma_ns),
+            "pad_ns": int(cfg.pad_ns),
+            "detune_hz": int(cfg.detune_hz),
+            "envelope": str(cfg.envelope).strip().upper() or "SQUARE",
+        }
+
+    @staticmethod
+    def _measure_cfg_to_dict(cfg: MeasureCfg) -> Dict[str, int]:
+        return {
+            "n_readout": int(cfg.n_readout),
+            "readout_ns": int(cfg.readout_ns),
+            "ringup_ns": int(cfg.ringup_ns),
+        }
+
+    def build_json_config_dict(self) -> Dict[str, object]:
+        return {
+            "format": "qubit-fpga-config",
+            "version": 1,
+            "reset_wait_cycles": int(self.shadow.reset_wait_cycles),
+            "play_cfgs": [self._play_cfg_to_dict(cfg) for cfg in self.shadow.play_cfgs],
+            "measure_cfgs": [self._measure_cfg_to_dict(cfg) for cfg in self.shadow.measure_cfgs],
+            "instr_words": [int(word) & 0xFFFFFFFF for word in self.shadow.instr_words],
+        }
+
+    def apply_json_config_dict(self, data: Dict[str, object], *, send_to_fpga: bool = True) -> None:
+        if not isinstance(data, dict):
+            raise ValueError("JSON config must be an object")
+
+        reset_wait_cycles = self._parse_int(data.get("reset_wait_cycles", self.shadow.reset_wait_cycles), self.shadow.reset_wait_cycles)
+        play_cfgs = data.get("play_cfgs", [])
+        measure_cfgs = data.get("measure_cfgs", [])
+        instr_words = data.get("instr_words", [])
+
+        if play_cfgs is not None and not isinstance(play_cfgs, list):
+            raise ValueError("play_cfgs must be a list")
+        if measure_cfgs is not None and not isinstance(measure_cfgs, list):
+            raise ValueError("measure_cfgs must be a list")
+        if instr_words is not None and not isinstance(instr_words, list):
+            raise ValueError("instr_words must be a list")
+
+        self.shadow.reset_wait_cycles = int(reset_wait_cycles)
+
+        if isinstance(play_cfgs, list):
+            for idx in range(min(len(play_cfgs), PlayCfgDepth)):
+                raw_cfg = play_cfgs[idx]
+                if not isinstance(raw_cfg, dict):
+                    continue
+                self.shadow.play_cfgs[idx] = PlayCfg(
+                    amp_q8_8=self._parse_int(raw_cfg.get("amp_q8_8", 0), self.shadow.play_cfgs[idx].amp_q8_8),
+                    phase_q8_8=self._parse_int(raw_cfg.get("phase_q8_8", 0), self.shadow.play_cfgs[idx].phase_q8_8),
+                    duration_ns=self._parse_int(raw_cfg.get("duration_ns", 0), self.shadow.play_cfgs[idx].duration_ns),
+                    sigma_ns=self._parse_int(raw_cfg.get("sigma_ns", 0), self.shadow.play_cfgs[idx].sigma_ns),
+                    pad_ns=self._parse_int(raw_cfg.get("pad_ns", 0), self.shadow.play_cfgs[idx].pad_ns),
+                    detune_hz=self._parse_int(raw_cfg.get("detune_hz", 0), self.shadow.play_cfgs[idx].detune_hz),
+                    envelope=str(raw_cfg.get("envelope", self.shadow.play_cfgs[idx].envelope)).strip().upper() or self.shadow.play_cfgs[idx].envelope,
+                )
+
+        if isinstance(measure_cfgs, list):
+            for idx in range(min(len(measure_cfgs), MeasureCfgDepth)):
+                raw_cfg = measure_cfgs[idx]
+                if not isinstance(raw_cfg, dict):
+                    continue
+                self.shadow.measure_cfgs[idx] = MeasureCfg(
+                    n_readout=self._parse_int(raw_cfg.get("n_readout", 0), self.shadow.measure_cfgs[idx].n_readout),
+                    readout_ns=self._parse_int(raw_cfg.get("readout_ns", 0), self.shadow.measure_cfgs[idx].readout_ns),
+                    ringup_ns=self._parse_int(raw_cfg.get("ringup_ns", 0), self.shadow.measure_cfgs[idx].ringup_ns),
+                )
+
+        if isinstance(instr_words, list):
+            for idx in range(min(len(instr_words), InstrDepth)):
+                self.shadow.instr_words[idx] = self._parse_int(instr_words[idx], self.shadow.instr_words[idx]) & 0xFFFFFFFF
+
+        if send_to_fpga:
+            self.send_all_registers()
+
+    def save_json_config_file(self, path_text: str) -> Path:
+        path = self._normalize_json_path(path_text)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(self.build_json_config_dict(), f, indent=2)
+            f.write("\n")
+        return path
+
+    def load_json_config_file(self, path_text: str, *, send_to_fpga: bool = True) -> Path:
+        path = self._normalize_json_path(path_text)
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.apply_json_config_dict(data, send_to_fpga=send_to_fpga)
+        return path
+
+    # -------------------------------------------------------------------------
     # Formatting helpers
     # -------------------------------------------------------------------------
 
@@ -922,6 +1031,36 @@ class UartMenu:
             else:
                 print("Unknown selection")
 
+    def _menu_json_config(self) -> None:
+        default_path = "qubit_fpga_config.json"
+
+        while True:
+            print()
+            print("JSON config file:")
+            print("  1. Save current local config to JSON file")
+            print("  2. Load config from JSON file and send to FPGA")
+            print("  b. Back")
+            sel = input("Select: ").strip().lower()
+
+            try:
+                if sel == "1":
+                    path_text = self._input_with_default("Save JSON file path", default_path)
+                    path = self.save_json_config_file(path_text)
+                    print(f"Saved config to {path}")
+                    self._pause()
+                elif sel == "2":
+                    path_text = self._input_with_default("Load JSON file path", default_path)
+                    path = self.load_json_config_file(path_text, send_to_fpga=True)
+                    print(f"Loaded config from {path} and sent writable registers to FPGA")
+                    self._pause()
+                elif sel == "b":
+                    return
+                else:
+                    print("Unknown selection")
+            except Exception as exc:
+                print(f"Error: {exc}")
+                self._pause()
+
     def run(self) -> None:
         while True:
             print()
@@ -938,6 +1077,7 @@ class UartMenu:
             print("10. Start experiment")
             print("11. Soft reset control bit (enabled here, disabled in web UI)")
             print("12. Help: packet formats")
+            print("13. Save or load JSON config file")
             print("q. Exit menu")
             print("==================================================")
             sel = input("Select: ").strip().lower()
@@ -969,6 +1109,8 @@ class UartMenu:
             elif sel == "12":
                 self._print_packet_formats()
                 self._pause()
+            elif sel == "13":
+                self._menu_json_config()
             elif sel == "q":
                 return
             else:

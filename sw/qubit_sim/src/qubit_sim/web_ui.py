@@ -1,3 +1,12 @@
+##------------------------------------------------------------------------------
+## PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
+##------------------------------------------------------------------------------
+## Copyright (C) 2026 Sean Sandone
+## SPDX-License-Identifier: AGPL-3.0-or-later
+## Please see the LICENSE file for details.
+## WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
+##------------------------------------------------------------------------------
+
 from __future__ import annotations
 
 from flask import Flask, jsonify, redirect, render_template_string, request, url_for
@@ -377,6 +386,7 @@ PAGE_HTML = """
         <input type="hidden" name="action" value="send_all">
         <button type="submit">Send all registers</button>
       </form>
+      <button type="button" onclick="toggleEdit('json-file-box')">Save or load JSON</button>
       <form method="post" action="{{ url_for('action_route') }}">
         <input type="hidden" name="action" value="start_exp">
         <button type="submit">Start experiment</button>
@@ -384,6 +394,35 @@ PAGE_HTML = """
       <form method="post" action="{{ url_for('action_route') }}">
         <input type="hidden" name="action" value="soft_reset">
         <button type="submit" disabled title="Soft reset is disabled for now">Soft reset</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="panel edit-box" id="json-file-box" hidden style="margin-bottom: 18px;">
+    <h2 style="margin-top:0;">JSON Config File</h2>
+    <div class="hint" style="margin-bottom:10px;">Save the current local writable configuration to a JSON file, or load a JSON file into the local shadow and send it to the FPGA.</div>
+    <div class="actions-inline">
+      <form method="post" action="{{ url_for('save_json_config_route') }}">
+        <div class="form-grid" style="min-width: 420px;">
+          <label>
+            Save file path
+            <input name="json_path" value="{{ state.json_default_path }}" placeholder="qubit_fpga_config.json">
+          </label>
+        </div>
+        <div class="actions-inline">
+          <button type="submit">Save JSON file</button>
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('load_json_config_route') }}">
+        <div class="form-grid" style="min-width: 420px;">
+          <label>
+            Load file path
+            <input name="json_path" value="{{ state.json_default_path }}" placeholder="qubit_fpga_config.json">
+          </label>
+        </div>
+        <div class="actions-inline">
+          <button type="submit">Load JSON file and send</button>
+        </div>
       </form>
     </div>
   </div>
@@ -779,6 +818,7 @@ class WebUiApp:
         state = self.viewer.get_state_snapshot()
         state["opcode_options"] = OPCODE_OPTIONS
         state["calibration_rows"] = _build_calibration_rows(state.get("calibration", {}))
+        state["json_default_path"] = "qubit_fpga_config.json"
 
         if self._menu is None:
             return state
@@ -910,6 +950,24 @@ class WebUiApp:
             self.viewer.load_from_shadow(self._menu)
             return redirect(url_for('index', _anchor=f'instr-{index}'))
 
+        @self.app.post('/json/save')
+        def save_json_config_route():
+            if self._menu is not None:
+                json_path = str(request.form.get('json_path', 'qubit_fpga_config.json')).strip() or 'qubit_fpga_config.json'
+                self._menu.save_json_config_file(json_path)
+                self.viewer.load_from_shadow(self._menu)
+            return redirect(url_for('index'))
+
+        @self.app.post('/json/load')
+        def load_json_config_route():
+            if self._menu is not None:
+                json_path = str(request.form.get('json_path', 'qubit_fpga_config.json')).strip() or 'qubit_fpga_config.json'
+                self._menu.load_json_config_file(json_path, send_to_fpga=True)
+                self.viewer.load_from_shadow(self._menu)
+            return redirect(url_for('index'))
+
+        self.save_json_config_route = save_json_config_route
+        self.load_json_config_route = load_json_config_route
         self.action_route = action_route
         self.edit_play_cfg_route = edit_play_cfg_route
         self.edit_measure_cfg_route = edit_measure_cfg_route
