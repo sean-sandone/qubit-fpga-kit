@@ -68,7 +68,7 @@ package rtl_pkg;
     // Memory sizing
     // ============================================================
 
-    localparam int unsigned PlayCfgDepth = 8;
+    localparam int unsigned PlayCfgDepth = 16;
     localparam int unsigned MeasCfgDepth = 4;
     localparam int unsigned InstrDepth   = 32;
 

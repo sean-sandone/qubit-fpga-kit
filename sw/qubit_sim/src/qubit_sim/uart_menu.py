@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 
-PlayCfgDepth = 8
+PlayCfgDepth = 16
 MeasureCfgDepth = 4
 InstrDepth = 32
 
@@ -565,6 +565,32 @@ class UartMenu:
         print("READ_ALL TX  : C3 3C 10 [flags with bit2=1]")
         print("DUMP RX      : D4 4D 20 [group][index][u32 little-endian]")
 
+    @staticmethod
+    def _q2_14_to_float(value: int) -> float:
+        return float(int(value)) / 16384.0
+
+    def _format_calibration_display(self, field: str, raw_value: int) -> str:
+        raw_value = int(raw_value)
+        if field == "cal_sample_count":
+            return f"{raw_value} samples"
+        if field in (
+            "cal_i_avg",
+            "cal_q_avg",
+            "cal_i0_ref",
+            "cal_q0_ref",
+            "cal_i1_ref",
+            "cal_q1_ref",
+            "cal_i_threshold",
+        ):
+            return f"{self._q2_14_to_float(raw_value):.6f} FS (Q2.14)"
+        if field == "cal_state_polarity":
+            return "1 = positive state" if raw_value else "0 = negative state"
+        if field in ("cal_i0q0_valid", "cal_i1q1_valid", "cal_threshold_valid", "meas_state_valid"):
+            return "valid" if raw_value else "not valid"
+        if field == "meas_state":
+            return "state 1" if raw_value else "state 0"
+        return str(raw_value)
+
     def _print_instruction_help(self) -> None:
         print()
         print("Instruction entry help:")
@@ -608,20 +634,26 @@ class UartMenu:
         print(f"  last_dump_records   = {self.shadow.last_dump_record_count}")
         print()
         print("Calibration / measurement:")
-        print(f"  cal_sample_count    = {self.shadow.cal_sample_count}")
-        print(f"  cal_i_avg           = {self.shadow.cal_i_avg}")
-        print(f"  cal_q_avg           = {self.shadow.cal_q_avg}")
-        print(f"  cal_i0_ref          = {self.shadow.cal_i0_ref}")
-        print(f"  cal_q0_ref          = {self.shadow.cal_q0_ref}")
-        print(f"  cal_i1_ref          = {self.shadow.cal_i1_ref}")
-        print(f"  cal_q1_ref          = {self.shadow.cal_q1_ref}")
-        print(f"  cal_i_threshold     = {self.shadow.cal_i_threshold}")
-        print(f"  cal_state_polarity  = {self.shadow.cal_state_polarity}")
-        print(f"  cal_i0q0_valid      = {self.shadow.cal_i0q0_valid}")
-        print(f"  cal_i1q1_valid      = {self.shadow.cal_i1q1_valid}")
-        print(f"  cal_threshold_valid = {self.shadow.cal_threshold_valid}")
-        print(f"  meas_state          = {self.shadow.meas_state}")
-        print(f"  meas_state_valid    = {self.shadow.meas_state_valid}")
+        calibration_fields = [
+            ("cal_sample_count", self.shadow.cal_sample_count),
+            ("cal_i_avg", self.shadow.cal_i_avg),
+            ("cal_q_avg", self.shadow.cal_q_avg),
+            ("cal_i0_ref", self.shadow.cal_i0_ref),
+            ("cal_q0_ref", self.shadow.cal_q0_ref),
+            ("cal_i1_ref", self.shadow.cal_i1_ref),
+            ("cal_q1_ref", self.shadow.cal_q1_ref),
+            ("cal_i_threshold", self.shadow.cal_i_threshold),
+            ("cal_state_polarity", self.shadow.cal_state_polarity),
+            ("cal_i0q0_valid", self.shadow.cal_i0q0_valid),
+            ("cal_i1q1_valid", self.shadow.cal_i1q1_valid),
+            ("cal_threshold_valid", self.shadow.cal_threshold_valid),
+            ("meas_state", self.shadow.meas_state),
+            ("meas_state_valid", self.shadow.meas_state_valid),
+        ]
+        for field_name, raw_value in calibration_fields:
+            print(
+                f"  {field_name:<19} = {int(raw_value):>8}  {self._format_calibration_display(field_name, raw_value)}"
+            )
         print()
         print("PLAY CFG:")
         for idx, cfg in enumerate(self.shadow.play_cfgs):

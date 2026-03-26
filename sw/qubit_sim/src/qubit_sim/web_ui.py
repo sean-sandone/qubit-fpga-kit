@@ -495,26 +495,18 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
         <div class="duel-tables">
             <table>
             <tbody>
-                <tr><th>Field</th><th>Value</th></tr>
-                <tr><td>cal_i_threshold</td><td>{{ state.calibration.cal_i_threshold }}</td></tr>
-                <tr><td>cal_state_polarity</td><td>{{ state.calibration.cal_state_polarity }}</td></tr>
-                <tr><td>cal_i0q0_valid</td><td>{{ state.calibration.cal_i0q0_valid }}</td></tr>
-                <tr><td>cal_i1q1_valid</td><td>{{ state.calibration.cal_i1q1_valid }}</td></tr>
-                <tr><td>cal_threshold_valid</td><td>{{ state.calibration.cal_threshold_valid }}</td></tr>
-                <tr><td>meas_state</td><td>{{ state.calibration.meas_state }}</td></tr>
-                <tr><td>meas_state_valid</td><td>{{ state.calibration.meas_state_valid }}</td></tr>
+                <tr><th>Field</th><th>Raw</th><th>Value</th></tr>
+                {% for row in state.calibration_rows.left %}
+                <tr><td>{{ row.field }}</td><td>{{ row.raw }}</td><td>{{ row.value }}</td></tr>
+                {% endfor %}
             </tbody>
             </table>
             <table>
             <tbody>
-                <tr><th>Field</th><th>Value</th></tr>
-                <tr><td>cal_sample_count</td><td>{{ state.calibration.cal_sample_count }}</td></tr>
-                <tr><td>cal_i_avg</td><td>{{ state.calibration.cal_i_avg }}</td></tr>
-                <tr><td>cal_q_avg</td><td>{{ state.calibration.cal_q_avg }}</td></tr>
-                <tr><td>cal_i0_ref</td><td>{{ state.calibration.cal_i0_ref }}</td></tr>
-                <tr><td>cal_q0_ref</td><td>{{ state.calibration.cal_q0_ref }}</td></tr>
-                <tr><td>cal_i1_ref</td><td>{{ state.calibration.cal_i1_ref }}</td></tr>
-                <tr><td>cal_q1_ref</td><td>{{ state.calibration.cal_q1_ref }}</td></tr>
+                <tr><th>Field</th><th>Raw</th><th>Value</th></tr>
+                {% for row in state.calibration_rows.right %}
+                <tr><td>{{ row.field }}</td><td>{{ row.raw }}</td><td>{{ row.value }}</td></tr>
+                {% endfor %}
             </tbody>
             </table>
         </div>
@@ -693,6 +685,70 @@ def _hex_u32(x: int) -> str:
     return f"0x{int(x) & 0xFFFFFFFF:08X}"
 
 
+def _q2_14_to_float(value: int) -> float:
+    return float(int(value)) / 16384.0
+
+
+def _format_calibration_value(field: str, raw_value: int) -> str:
+    raw_value = int(raw_value)
+    if field == "cal_sample_count":
+        return f"{raw_value} samples"
+    if field in (
+        "cal_i_avg",
+        "cal_q_avg",
+        "cal_i0_ref",
+        "cal_q0_ref",
+        "cal_i1_ref",
+        "cal_q1_ref",
+        "cal_i_threshold",
+    ):
+        return f"{_q2_14_to_float(raw_value):.6f} FS (Q2.14)"
+    if field == "cal_state_polarity":
+        return "1 = positive state" if raw_value else "0 = negative state"
+    if field in ("cal_i0q0_valid", "cal_i1q1_valid", "cal_threshold_valid", "meas_state_valid"):
+        return "valid" if raw_value else "not valid"
+    if field == "meas_state":
+        return "state 1" if raw_value else "state 0"
+    return str(raw_value)
+
+
+def _build_calibration_rows(calibration: dict) -> dict:
+    left_fields = [
+        "cal_i_threshold",
+        "cal_state_polarity",
+        "cal_i0q0_valid",
+        "cal_i1q1_valid",
+        "cal_threshold_valid",
+        "meas_state",
+        "meas_state_valid",
+    ]
+    right_fields = [
+        "cal_sample_count",
+        "cal_i_avg",
+        "cal_q_avg",
+        "cal_i0_ref",
+        "cal_q0_ref",
+        "cal_i1_ref",
+        "cal_q1_ref",
+    ]
+
+    def _rows(fields):
+        rows = []
+        for field in fields:
+            raw_value = int(calibration.get(field, 0))
+            rows.append({
+                "field": field,
+                "raw": raw_value,
+                "value": _format_calibration_value(field, raw_value),
+            })
+        return rows
+
+    return {
+        "left": _rows(left_fields),
+        "right": _rows(right_fields),
+    }
+
+
 def _decode_instr_word(word: int) -> dict:
     word = int(word) & 0xFFFFFFFF
     opcode = (word >> 28) & 0xF
@@ -722,6 +778,7 @@ class WebUiApp:
     def _build_page_state(self):
         state = self.viewer.get_state_snapshot()
         state["opcode_options"] = OPCODE_OPTIONS
+        state["calibration_rows"] = _build_calibration_rows(state.get("calibration", {}))
 
         if self._menu is None:
             return state
