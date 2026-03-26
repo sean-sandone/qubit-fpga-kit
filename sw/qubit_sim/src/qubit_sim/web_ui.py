@@ -230,6 +230,16 @@ PAGE_HTML = """
       flex-wrap: wrap;
       justify-content: flex-end;
     }
+    .duel-tables {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    }
+    .duel-tables table {
+    flex: 1;
+    min-width: 280px;
+    }
     @media (max-width: 1300px) {
       .layout { grid-template-columns: 1fr; }
     }
@@ -360,8 +370,8 @@ PAGE_HTML = """
     </div>
     <div class="actions">
       <form method="post" action="{{ url_for('action_route') }}">
-        <input type="hidden" name="action" value="reload_shadow">
-        <button type="submit">Reload shadow defaults</button>
+        <input type="hidden" name="action" value="refresh_data">
+        <button type="submit">Refresh Data</button>
       </form>
       <form method="post" action="{{ url_for('action_route') }}">
         <input type="hidden" name="action" value="send_all">
@@ -373,7 +383,7 @@ PAGE_HTML = """
       </form>
       <form method="post" action="{{ url_for('action_route') }}">
         <input type="hidden" name="action" value="soft_reset">
-        <button type="submit">Soft reset</button>
+        <button type="submit" disabled title="Soft reset is disabled for now">Soft reset</button>
       </form>
     </div>
   </div>
@@ -463,15 +473,53 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
     </div>
 
     <div style="display:grid; gap: 18px; align-content:start;">
+    
       <div class="panel">
-        <h2 style="margin-top:0;">Control / Status</h2>
-        <div class="status-grid">
-          <div>start_exp</div><div>{{ state.control.start_exp }}</div>
-          <div>soft_reset</div><div>{{ state.control.soft_reset }}</div>
-          <div>reset_wait_cycles</div><div>{{ state.control.reset_wait_cycles }}</div>
-          <div>captured_packets</div><div>{{ state.control.captured_packets }}</div>
+        <h2 style="margin-top:0;">Status</h2>
+        <div class="duel-tables">
+            <table>
+            <tbody>
+                <tr><td>reset_wait_cycles</td><td>{{ state.control.reset_wait_cycles }}</td></tr>
+            </tbody>
+            </table>
+            <table>
+            <tbody>
+                <tr><td>captured_packets</td><td>{{ state.control.captured_packets }}</td></tr>
+            </tbody>
+            </table>
         </div>
       </div>
+      
+      <div class="panel">
+        <h2 style="margin-top:0;">Calibration Registers</h2>
+        <div class="duel-tables">
+            <table>
+            <tbody>
+                <tr><th>Field</th><th>Value</th></tr>
+                <tr><td>cal_i_threshold</td><td>{{ state.calibration.cal_i_threshold }}</td></tr>
+                <tr><td>cal_state_polarity</td><td>{{ state.calibration.cal_state_polarity }}</td></tr>
+                <tr><td>cal_i0q0_valid</td><td>{{ state.calibration.cal_i0q0_valid }}</td></tr>
+                <tr><td>cal_i1q1_valid</td><td>{{ state.calibration.cal_i1q1_valid }}</td></tr>
+                <tr><td>cal_threshold_valid</td><td>{{ state.calibration.cal_threshold_valid }}</td></tr>
+                <tr><td>meas_state</td><td>{{ state.calibration.meas_state }}</td></tr>
+                <tr><td>meas_state_valid</td><td>{{ state.calibration.meas_state_valid }}</td></tr>
+            </tbody>
+            </table>
+            <table>
+            <tbody>
+                <tr><th>Field</th><th>Value</th></tr>
+                <tr><td>cal_sample_count</td><td>{{ state.calibration.cal_sample_count }}</td></tr>
+                <tr><td>cal_i_avg</td><td>{{ state.calibration.cal_i_avg }}</td></tr>
+                <tr><td>cal_q_avg</td><td>{{ state.calibration.cal_q_avg }}</td></tr>
+                <tr><td>cal_i0_ref</td><td>{{ state.calibration.cal_i0_ref }}</td></tr>
+                <tr><td>cal_q0_ref</td><td>{{ state.calibration.cal_q0_ref }}</td></tr>
+                <tr><td>cal_i1_ref</td><td>{{ state.calibration.cal_i1_ref }}</td></tr>
+                <tr><td>cal_q1_ref</td><td>{{ state.calibration.cal_q1_ref }}</td></tr>
+            </tbody>
+            </table>
+        </div>
+        <div class="hint" style="margin-top:10px;">Calibration registers are view only in this UI.</div>
+      </div>    
 
       <div class="panel">
         <h2 style="margin-top:0;">Measure Config Registers</h2>
@@ -731,8 +779,8 @@ class WebUiApp:
         @self.app.post('/action')
         def action_route():
             action = str(request.form.get('action', '')).strip().lower()
-            if action == 'reload_shadow':
-                self.viewer.reload_from_menu_shadow()
+            if action == 'refresh_data':
+                self.viewer.request_register_dump()
             elif action == 'send_all':
                 self.viewer.send_all_registers()
             elif action == 'start_exp':
