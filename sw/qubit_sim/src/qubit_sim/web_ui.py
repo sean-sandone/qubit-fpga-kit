@@ -267,6 +267,16 @@ PAGE_HTML = """
       elem.hidden = !elem.hidden;
     }
 
+    function toggleSection(id, buttonElem) {
+      const elem = document.getElementById(id);
+      if (!elem) return;
+      const isHidden = elem.hidden === true;
+      elem.hidden = !isHidden;
+      if (buttonElem) {
+        buttonElem.textContent = isHidden ? 'Hide' : 'Show';
+      }
+    }
+
     function updateOperandField(selectElem, operandWrapId, currentValues) {
       const opcode = parseInt(selectElem.value || "0", 10);
       const wrap = document.getElementById(operandWrapId);
@@ -532,29 +542,6 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
             </table>
         </div>
       </div>
-      
-      <div class="panel">
-        <h2 style="margin-top:0;">Calibration Registers</h2>
-        <div class="duel-tables">
-            <table>
-            <tbody>
-                <tr><th>Field</th><th>Raw</th><th>Value</th></tr>
-                {% for row in state.calibration_rows.left %}
-                <tr><td>{{ row.field }}</td><td>{{ row.raw }}</td><td>{{ row.value }}</td></tr>
-                {% endfor %}
-            </tbody>
-            </table>
-            <table>
-            <tbody>
-                <tr><th>Field</th><th>Raw</th><th>Value</th></tr>
-                {% for row in state.calibration_rows.right %}
-                <tr><td>{{ row.field }}</td><td>{{ row.raw }}</td><td>{{ row.value }}</td></tr>
-                {% endfor %}
-            </tbody>
-            </table>
-        </div>
-        <div class="hint" style="margin-top:10px;">Calibration registers are view only in this UI.</div>
-      </div>    
 
       <div class="panel">
         <div class="card-head" style="margin-bottom:0;">
@@ -612,6 +599,29 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
           {% endif %}
         </div>
       </div>
+            
+      <div class="panel">
+        <h2 style="margin-top:0;">Calibration Registers</h2>
+        <div class="duel-tables">
+            <table>
+            <tbody>
+                <tr><th>Field</th><th>Raw</th><th>Value</th></tr>
+                {% for row in state.calibration_rows.left %}
+                <tr><td>{{ row.field }}</td><td>{{ row.raw }}</td><td>{{ row.value }}</td></tr>
+                {% endfor %}
+            </tbody>
+            </table>
+            <table>
+            <tbody>
+                <tr><th>Field</th><th>Raw</th><th>Value</th></tr>
+                {% for row in state.calibration_rows.right %}
+                <tr><td>{{ row.field }}</td><td>{{ row.raw }}</td><td>{{ row.value }}</td></tr>
+                {% endfor %}
+            </tbody>
+            </table>
+        </div>
+        <div class="hint" style="margin-top:10px;">Calibration registers are view only in this UI.</div>
+      </div>    
 
       <div class="panel">
         <h2 style="margin-top:0;">Measure Config Registers</h2>
