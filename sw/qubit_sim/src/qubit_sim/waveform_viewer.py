@@ -62,6 +62,13 @@ class PreviewImages:
     iq_large_data_url: str
 
 
+@dataclass
+class ExperimentPlotImages:
+    i_avg_data_url: str
+    q_avg_data_url: str
+    meas_state_data_url: str
+
+
 class PacketMirror:
     def __init__(self) -> None:
         self.shadow = ShadowRegs()
@@ -265,6 +272,25 @@ class WaveformRenderer:
         fig.tight_layout()
         return fig
 
+    def _build_experiment_series_figure(
+        self,
+        xs,
+        ys,
+        title: str,
+        ylabel: str,
+        width_in: float = 6.2,
+        height_in: float = 2.4,
+    ) -> Figure:
+        fig = Figure(figsize=(width_in, height_in), dpi=100)
+        ax = fig.add_subplot(111)
+        ax.plot(xs, ys, marker='o')
+        ax.set_title(title)
+        ax.set_xlabel('Captured Result Index')
+        ax.set_ylabel(ylabel)
+        ax.grid(True)
+        fig.tight_layout()
+        return fig
+
     def render_preview_images(self, cfg: PlayCfg) -> PreviewImages:
         t_s, env, i_wave, q_wave = self.render_cfg(cfg)
         env_small = self._build_env_figure(t_s, env, 'Envelope', 3.0, 1.6)
@@ -278,6 +304,22 @@ class WaveformRenderer:
             iq_large_data_url=self._fig_to_data_url(iq_large),
         )
 
+    def render_experiment_plots(self, results: List[Dict[str, Any]]) -> ExperimentPlotImages:
+        xs = list(range(len(results)))
+        i_vals = [float(row.get('I_avg', 0.0)) for row in results]
+        q_vals = [float(row.get('Q_avg', 0.0)) for row in results]
+        meas_state_vals = [int(row.get('meas_state', 0)) for row in results]
+
+        i_fig = self._build_experiment_series_figure(xs, i_vals, 'I_avg vs Captured Result Index', 'I_avg')
+        q_fig = self._build_experiment_series_figure(xs, q_vals, 'Q_avg vs Captured Result Index', 'Q_avg')
+        meas_state_fig = self._build_experiment_series_figure(xs, meas_state_vals, 'meas_state vs Captured Result Index', 'meas_state')
+
+        return ExperimentPlotImages(
+            i_avg_data_url=self._fig_to_data_url(i_fig),
+            q_avg_data_url=self._fig_to_data_url(q_fig),
+            meas_state_data_url=self._fig_to_data_url(meas_state_fig),
+        )
+
 
 class WaveformViewerApp:
     """
@@ -289,6 +331,8 @@ class WaveformViewerApp:
         self.mirror = PacketMirror()
         self.renderer = WaveformRenderer(fs_hz=fs_hz, if_hz=if_hz)
         self.preview_cache: Dict[int, PreviewImages] = {}
+        self.experiment_results: List[Dict[str, Any]] = []
+        self.experiment_plot_cache: ExperimentPlotImages | None = None
         self._lock = threading.RLock()
         self._menu: UartMenu | None = None
         self._empty_play_cfg = PlayCfg()
@@ -319,8 +363,35 @@ class WaveformViewerApp:
             if self._menu is not None:
                 self._menu.request_register_dump()
 
+    def clear_experiment_results(self) -> None:
+        with self._lock:
+            self.experiment_results = []
+            self.experiment_plot_cache = None
+
+    def capture_measure_result(
+        self,
+        *,
+        i_avg_q2_14: int,
+        q_avg_q2_14: int,
+        i_avg: float,
+        q_avg: float,
+        meas_state: int,
+    ) -> None:
+        with self._lock:
+            self.experiment_results.append({
+                'index': len(self.experiment_results),
+                'I_avg_q2_14': int(i_avg_q2_14),
+                'Q_avg_q2_14': int(q_avg_q2_14),
+                'I_avg': float(i_avg),
+                'Q_avg': float(q_avg),
+                'meas_state': int(meas_state),
+            })
+            self.experiment_plot_cache = None
+
     def send_start_experiment(self) -> None:
         with self._lock:
+            self.experiment_results = []
+            self.experiment_plot_cache = None
             if self._menu is not None:
                 self._menu.send_start_experiment_pulse()
 
@@ -415,7 +486,22 @@ class WaveformViewerApp:
                     'operand': dec['operand'],
                 })
 
+            experiment_plots = None
+            if self.experiment_results:
+                if self.experiment_plot_cache is None:
+                    self.experiment_plot_cache = self.renderer.render_experiment_plots(self.experiment_results)
+                experiment_plots = {
+                    'i_avg': self.experiment_plot_cache.i_avg_data_url,
+                    'q_avg': self.experiment_plot_cache.q_avg_data_url,
+                    'meas_state': self.experiment_plot_cache.meas_state_data_url,
+                }
+
             return {
+                'experiment_results': {
+                    'count': len(self.experiment_results),
+                    'rows': [dict(row) for row in self.experiment_results],
+                    'plots': experiment_plots,
+                },
                 'control': {
                     'start_exp': int(self.mirror.shadow.start_exp),
                     'soft_reset': int(self.mirror.shadow.soft_reset),

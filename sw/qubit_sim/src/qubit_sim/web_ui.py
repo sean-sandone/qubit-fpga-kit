@@ -192,6 +192,10 @@ PAGE_HTML = """
     .edit-box[hidden] {
       display: none !important;
     }
+    .edit-row td {
+      padding: 0 !important;
+      border-bottom: none !important;
+    }
     .form-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(180px, 1fr));
@@ -553,6 +557,63 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
       </div>    
 
       <div class="panel">
+        <div class="card-head" style="margin-bottom:0;">
+          <h2 style="margin:0;">Experiment Results</h2>
+          <button type="button" class="section-toggle" onclick="toggleSection('experiment-results-body', this)">Hide</button>
+        </div>
+        <div id="experiment-results-body">
+          <div class="hint" style="margin-top:10px;">Captured readout results are cleared when Start experiment is clicked.</div>
+
+          <table style="margin-top:10px;">
+            <tbody>
+              <tr><td>captured_results</td><td>{{ state.experiment_results.count }}</td></tr>
+            </tbody>
+          </table>
+
+          {% if state.experiment_results.count == 0 %}
+          <div class="note" style="margin-top:12px;">
+            No experiment results captured yet. Click Start experiment to begin collecting FPGA readout results.
+          </div>
+          {% else %}
+          <div class="plot-stack">
+            <div>
+              <div style="margin-bottom: 6px; color: var(--muted);">I_avg vs index of captured results</div>
+              <img src="{{ state.experiment_results.plots.i_avg }}" alt="I_avg experiment results plot">
+            </div>
+            <div>
+              <div style="margin-bottom: 6px; color: var(--muted);">Q_avg vs index of captured results</div>
+              <img src="{{ state.experiment_results.plots.q_avg }}" alt="Q_avg experiment results plot">
+            </div>
+            <div>
+              <div style="margin-bottom: 6px; color: var(--muted);">meas_state vs index of captured results</div>
+              <img src="{{ state.experiment_results.plots.meas_state }}" alt="meas_state experiment results plot">
+            </div>
+          </div>
+
+          <div class="results-table">
+            <table>
+              <thead>
+                <tr><th>Idx</th><th>I_avg_q2_14</th><th>Q_avg_q2_14</th><th>I_avg</th><th>Q_avg</th><th>meas_state</th></tr>
+              </thead>
+              <tbody>
+                {% for row in state.experiment_results.rows %}
+                <tr>
+                  <td>{{ row.index }}</td>
+                  <td>{{ row.I_avg_q2_14 }}</td>
+                  <td>{{ row.Q_avg_q2_14 }}</td>
+                  <td>{{ '%.6f'|format(row.I_avg) }}</td>
+                  <td>{{ '%.6f'|format(row.Q_avg) }}</td>
+                  <td>{{ row.meas_state }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="panel">
         <h2 style="margin-top:0;">Measure Config Registers</h2>
         <table>
           <thead>
@@ -567,7 +628,7 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
               <td>{{ cfg.ringup_ns }}</td>
               <td><button type="button" class="btn-small" onclick="toggleEdit('edit-measurecfg-{{ cfg.index }}')">Edit</button></td>
             </tr>
-            <tr>
+            <tr class="edit-row">
               <td colspan="5" style="padding-top:0;">
                 <div class="edit-box" id="edit-measurecfg-{{ cfg.index }}" hidden>
                   <form method="post" action="{{ url_for('edit_measure_cfg_route', index=cfg.index) }}">
@@ -622,7 +683,7 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
               <td>{{ instr.operand }}</td>
               <td><button type="button" class="btn-small" onclick="toggleEdit('edit-instr-{{ instr.index }}')">Edit</button></td>
             </tr>
-            <tr>
+            <tr class="edit-row">
               <td colspan="7" style="padding-top:0;">
                 <div class="edit-box" id="edit-instr-{{ instr.index }}" hidden data-instr-editor="1">
                   <form method="post" action="{{ url_for('edit_instruction_route', index=instr.index) }}">
@@ -983,6 +1044,26 @@ class WebUiApp:
 
     def post_packet(self, label: str, packet: bytes) -> None:
         self.viewer.post_packet(label, packet)
+
+    def clear_experiment_results(self) -> None:
+        self.viewer.clear_experiment_results()
+
+    def capture_measure_result(
+        self,
+        *,
+        i_avg_q2_14: int,
+        q_avg_q2_14: int,
+        i_avg: float,
+        q_avg: float,
+        meas_state: int,
+    ) -> None:
+        self.viewer.capture_measure_result(
+            i_avg_q2_14=i_avg_q2_14,
+            q_avg_q2_14=q_avg_q2_14,
+            i_avg=i_avg,
+            q_avg=q_avg,
+            meas_state=meas_state,
+        )
 
     def run(self) -> None:
         self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False)
