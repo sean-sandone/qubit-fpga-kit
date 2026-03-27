@@ -216,3 +216,6 @@ xsim.dir/
 *.pb
 *.jou
 *.log
+
+# ui configuration files
+*.json

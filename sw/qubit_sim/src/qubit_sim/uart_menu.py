@@ -9,13 +9,15 @@
 
 from __future__ import annotations
 
+import json
 import struct
 import sys
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 
-PlayCfgDepth = 8
+PlayCfgDepth = 16
 MeasureCfgDepth = 4
 InstrDepth = 32
 
@@ -455,9 +457,10 @@ class UartMenu:
     def _send_packet(self, label: str, pkt: bytes) -> None:
         self._send_packet_cb(label, pkt)
 
-    def _send_and_confirm(self, label: str, pkt: bytes) -> None:
+    def _send_with_optional_confirm(self, label: str, pkt: bytes, confirm: bool = True) -> None:
         self._send_packet(label, pkt)
-        self.request_register_dump()
+        if confirm:
+            self.request_register_dump()
 
     def request_register_dump(self) -> None:
         self._send_packet("CONTROL_READ_ALL", self.build_read_all_packet())
@@ -466,39 +469,55 @@ class UartMenu:
         pkt = self.build_control_packet(self.shadow.start_exp, self.shadow.soft_reset, 0)
         self._send_packet("CONTROL", pkt)
 
-    def send_reset_wait(self) -> None:
+    def send_reset_wait(self, confirm: bool = True) -> None:
         pkt = self.build_reset_wait_packet(self.shadow.reset_wait_cycles)
-        self._send_and_confirm("RESET_WAIT", pkt)
+        self._send_with_optional_confirm("RESET_WAIT", pkt, confirm=confirm)
 
-    def send_play_cfg(self, index: int) -> None:
+    def send_play_cfg(self, index: int, confirm: bool = True) -> None:
         pkt = self.build_play_cfg_packet(index, self.shadow.play_cfgs[index])
-        self._send_and_confirm(f"PLAY_CFG[{index}]", pkt)
+        self._send_with_optional_confirm(f"PLAY_CFG[{index}]", pkt, confirm=confirm)
 
-    def send_measure_cfg(self, index: int) -> None:
+    def send_measure_cfg(self, index: int, confirm: bool = True) -> None:
         pkt = self.build_measure_cfg_packet(index, self.shadow.measure_cfgs[index])
-        self._send_and_confirm(f"MEASURE_CFG[{index}]", pkt)
+        self._send_with_optional_confirm(f"MEASURE_CFG[{index}]", pkt, confirm=confirm)
 
-    def send_instr(self, index: int) -> None:
+    def send_instr(self, index: int, confirm: bool = True) -> None:
         pkt = self.build_instr_packet(index, self.shadow.instr_words[index])
-        self._send_and_confirm(f"INSTR[{index}]", pkt)
+        self._send_with_optional_confirm(f"INSTR[{index}]", pkt, confirm=confirm)
 
     def send_all_play_cfgs(self) -> None:
+        wrote_any = False
         for idx in range(PlayCfgDepth):
-            self.send_play_cfg(idx)
+            self.send_play_cfg(idx, confirm=False)
+            wrote_any = True
+        if wrote_any:
+            self.request_register_dump()
 
     def send_all_measure_cfgs(self) -> None:
+        wrote_any = False
         for idx in range(MeasureCfgDepth):
-            self.send_measure_cfg(idx)
+            self.send_measure_cfg(idx, confirm=False)
+            wrote_any = True
+        if wrote_any:
+            self.request_register_dump()
 
     def send_all_instr(self) -> None:
+        wrote_any = False
         for idx in range(InstrDepth):
-            self.send_instr(idx)
+            self.send_instr(idx, confirm=False)
+            wrote_any = True
+        if wrote_any:
+            self.request_register_dump()
 
     def send_all_registers(self) -> None:
-        self.send_reset_wait()
-        self.send_all_play_cfgs()
-        self.send_all_measure_cfgs()
-        self.send_all_instr()
+        self.send_reset_wait(confirm=False)
+        for idx in range(PlayCfgDepth):
+            self.send_play_cfg(idx, confirm=False)
+        for idx in range(MeasureCfgDepth):
+            self.send_measure_cfg(idx, confirm=False)
+        for idx in range(InstrDepth):
+            self.send_instr(idx, confirm=False)
+        self.request_register_dump()
 
     def send_start_experiment_pulse(self) -> None:
         pkt = self.build_control_packet(1, 0, 0)
@@ -520,6 +539,129 @@ class UartMenu:
         if self._dump_complete_cb is not None:
             self._dump_complete_cb(self.shadow)
         return self.shadow
+
+    # -------------------------------------------------------------------------
+    # JSON file helpers
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_json_path(path_text: str) -> Path:
+        path = Path(str(path_text).strip()).expanduser()
+        if not path.suffix:
+            path = path.with_suffix(".json")
+        return path
+
+    @staticmethod
+    def _play_cfg_to_dict(cfg: PlayCfg) -> Dict[str, int | str]:
+        return {
+            "amp_q8_8": int(cfg.amp_q8_8),
+            "phase_q8_8": int(cfg.phase_q8_8),
+            "duration_ns": int(cfg.duration_ns),
+            "sigma_ns": int(cfg.sigma_ns),
+            "pad_ns": int(cfg.pad_ns),
+            "detune_hz": int(cfg.detune_hz),
+            "envelope": str(cfg.envelope).strip().upper() or "SQUARE",
+        }
+
+    @staticmethod
+    def _measure_cfg_to_dict(cfg: MeasureCfg) -> Dict[str, int]:
+        return {
+            "n_readout": int(cfg.n_readout),
+            "readout_ns": int(cfg.readout_ns),
+            "ringup_ns": int(cfg.ringup_ns),
+        }
+
+    def build_json_config_dict(self) -> Dict[str, object]:
+        return {
+            "format": "qubit-fpga-config",
+            "version": 1,
+            "reset_wait_cycles": int(self.shadow.reset_wait_cycles),
+            "play_cfgs": [
+                self._play_cfg_to_dict(self.shadow.play_cfgs[idx]) if int(self.shadow.play_cfg_valid[idx]) != 0 else None
+                for idx in range(PlayCfgDepth)
+            ],
+            "measure_cfgs": [self._measure_cfg_to_dict(cfg) for cfg in self.shadow.measure_cfgs],
+            "instr_words": [f"0x{(int(word) & 0xFFFFFFFF):08X}" for word in self.shadow.instr_words],
+        }
+
+    def apply_json_config_dict(self, data: Dict[str, object], *, send_to_fpga: bool = True) -> None:
+        if not isinstance(data, dict):
+            raise ValueError("JSON config must be an object")
+
+        reset_wait_cycles = self._parse_int(data.get("reset_wait_cycles", self.shadow.reset_wait_cycles), self.shadow.reset_wait_cycles)
+        play_cfgs = data.get("play_cfgs", [])
+        measure_cfgs = data.get("measure_cfgs", [])
+        instr_words = data.get("instr_words", [])
+
+        if play_cfgs is not None and not isinstance(play_cfgs, list):
+            raise ValueError("play_cfgs must be a list")
+        if measure_cfgs is not None and not isinstance(measure_cfgs, list):
+            raise ValueError("measure_cfgs must be a list")
+        if instr_words is not None and not isinstance(instr_words, list):
+            raise ValueError("instr_words must be a list")
+
+        self.shadow.reset_wait_cycles = int(reset_wait_cycles)
+
+        if isinstance(play_cfgs, list):
+            for idx in range(PlayCfgDepth):
+                raw_cfg = play_cfgs[idx] if idx < len(play_cfgs) else None
+                if raw_cfg is None:
+                    self.shadow.play_cfg_valid[idx] = 0
+                    self.shadow.play_cfgs[idx] = PlayCfg()
+                    continue
+                if not isinstance(raw_cfg, dict):
+                    continue
+                self.shadow.play_cfgs[idx] = PlayCfg(
+                    amp_q8_8=self._parse_int(raw_cfg.get("amp_q8_8", 0), self.shadow.play_cfgs[idx].amp_q8_8),
+                    phase_q8_8=self._parse_int(raw_cfg.get("phase_q8_8", 0), self.shadow.play_cfgs[idx].phase_q8_8),
+                    duration_ns=self._parse_int(raw_cfg.get("duration_ns", 0), self.shadow.play_cfgs[idx].duration_ns),
+                    sigma_ns=self._parse_int(raw_cfg.get("sigma_ns", 0), self.shadow.play_cfgs[idx].sigma_ns),
+                    pad_ns=self._parse_int(raw_cfg.get("pad_ns", 0), self.shadow.play_cfgs[idx].pad_ns),
+                    detune_hz=self._parse_int(raw_cfg.get("detune_hz", 0), self.shadow.play_cfgs[idx].detune_hz),
+                    envelope=str(raw_cfg.get("envelope", self.shadow.play_cfgs[idx].envelope)).strip().upper() or self.shadow.play_cfgs[idx].envelope,
+                )
+                self.shadow.play_cfg_valid[idx] = 1
+
+        if isinstance(measure_cfgs, list):
+            for idx in range(min(len(measure_cfgs), MeasureCfgDepth)):
+                raw_cfg = measure_cfgs[idx]
+                if not isinstance(raw_cfg, dict):
+                    continue
+                self.shadow.measure_cfgs[idx] = MeasureCfg(
+                    n_readout=self._parse_int(raw_cfg.get("n_readout", 0), self.shadow.measure_cfgs[idx].n_readout),
+                    readout_ns=self._parse_int(raw_cfg.get("readout_ns", 0), self.shadow.measure_cfgs[idx].readout_ns),
+                    ringup_ns=self._parse_int(raw_cfg.get("ringup_ns", 0), self.shadow.measure_cfgs[idx].ringup_ns),
+                )
+
+        if isinstance(instr_words, list):
+            for idx in range(min(len(instr_words), InstrDepth)):
+                self.shadow.instr_words[idx] = self._parse_int(instr_words[idx], self.shadow.instr_words[idx]) & 0xFFFFFFFF
+
+        if send_to_fpga:
+            self.send_reset_wait(confirm=False)
+            for idx in range(PlayCfgDepth):
+                if int(self.shadow.play_cfg_valid[idx]) != 0:
+                    self.send_play_cfg(idx, confirm=False)
+            for idx in range(MeasureCfgDepth):
+                self.send_measure_cfg(idx, confirm=False)
+            for idx in range(InstrDepth):
+                self.send_instr(idx, confirm=False)
+            self.request_register_dump()
+
+    def save_json_config_file(self, path_text: str) -> Path:
+        path = self._normalize_json_path(path_text)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(self.build_json_config_dict(), f, indent=2)
+            f.write("\n")
+        return path
+
+    def load_json_config_file(self, path_text: str, *, send_to_fpga: bool = True) -> Path:
+        path = self._normalize_json_path(path_text)
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.apply_json_config_dict(data, send_to_fpga=send_to_fpga)
+        return path
 
     # -------------------------------------------------------------------------
     # Formatting helpers
@@ -565,6 +707,32 @@ class UartMenu:
         print("READ_ALL TX  : C3 3C 10 [flags with bit2=1]")
         print("DUMP RX      : D4 4D 20 [group][index][u32 little-endian]")
 
+    @staticmethod
+    def _q2_14_to_float(value: int) -> float:
+        return float(int(value)) / 16384.0
+
+    def _format_calibration_display(self, field: str, raw_value: int) -> str:
+        raw_value = int(raw_value)
+        if field == "cal_sample_count":
+            return f"{raw_value} samples"
+        if field in (
+            "cal_i_avg",
+            "cal_q_avg",
+            "cal_i0_ref",
+            "cal_q0_ref",
+            "cal_i1_ref",
+            "cal_q1_ref",
+            "cal_i_threshold",
+        ):
+            return f"{self._q2_14_to_float(raw_value):.6f} FS (Q2.14)"
+        if field == "cal_state_polarity":
+            return "1 = positive state" if raw_value else "0 = negative state"
+        if field in ("cal_i0q0_valid", "cal_i1q1_valid", "cal_threshold_valid", "meas_state_valid"):
+            return "valid" if raw_value else "not valid"
+        if field == "meas_state":
+            return "state 1" if raw_value else "state 0"
+        return str(raw_value)
+
     def _print_instruction_help(self) -> None:
         print()
         print("Instruction entry help:")
@@ -607,6 +775,28 @@ class UartMenu:
         print(f"  last_dump_ok        = {self.shadow.last_dump_ok}")
         print(f"  last_dump_records   = {self.shadow.last_dump_record_count}")
         print()
+        print("Calibration / measurement:")
+        calibration_fields = [
+            ("cal_sample_count", self.shadow.cal_sample_count),
+            ("cal_i_avg", self.shadow.cal_i_avg),
+            ("cal_q_avg", self.shadow.cal_q_avg),
+            ("cal_i0_ref", self.shadow.cal_i0_ref),
+            ("cal_q0_ref", self.shadow.cal_q0_ref),
+            ("cal_i1_ref", self.shadow.cal_i1_ref),
+            ("cal_q1_ref", self.shadow.cal_q1_ref),
+            ("cal_i_threshold", self.shadow.cal_i_threshold),
+            ("cal_state_polarity", self.shadow.cal_state_polarity),
+            ("cal_i0q0_valid", self.shadow.cal_i0q0_valid),
+            ("cal_i1q1_valid", self.shadow.cal_i1q1_valid),
+            ("cal_threshold_valid", self.shadow.cal_threshold_valid),
+            ("meas_state", self.shadow.meas_state),
+            ("meas_state_valid", self.shadow.meas_state_valid),
+        ]
+        for field_name, raw_value in calibration_fields:
+            print(
+                f"  {field_name:<19} = {int(raw_value):>8}  {self._format_calibration_display(field_name, raw_value)}"
+            )
+        print()
         print("PLAY CFG:")
         for idx, cfg in enumerate(self.shadow.play_cfgs):
             print(
@@ -644,7 +834,7 @@ class UartMenu:
             print()
             print("Control register:")
             print("  1. Pulse start_exp = 1")
-            print("  2. Pulse soft_reset = 1")
+            print("  2. Pulse soft_reset = 1 (disabled in web UI for now)")
             print("  3. Request FPGA register dump")
             print("  b. Back")
             sel = input("Select: ").strip().lower()
@@ -874,6 +1064,36 @@ class UartMenu:
             else:
                 print("Unknown selection")
 
+    def _menu_json_config(self) -> None:
+        default_path = "config/qubit_fpga_config.json"
+
+        while True:
+            print()
+            print("JSON config file:")
+            print("  1. Save current local config to JSON file")
+            print("  2. Load config from JSON file and send to FPGA")
+            print("  b. Back")
+            sel = input("Select: ").strip().lower()
+
+            try:
+                if sel == "1":
+                    path_text = self._input_with_default("Save JSON file path", default_path)
+                    path = self.save_json_config_file(path_text)
+                    print(f"Saved config to {path}")
+                    self._pause()
+                elif sel == "2":
+                    path_text = self._input_with_default("Load JSON file path", default_path)
+                    path = self.load_json_config_file(path_text, send_to_fpga=True)
+                    print(f"Loaded config from {path} and sent writable registers to FPGA")
+                    self._pause()
+                elif sel == "b":
+                    return
+                else:
+                    print("Unknown selection")
+            except Exception as exc:
+                print(f"Error: {exc}")
+                self._pause()
+
     def run(self) -> None:
         while True:
             print()
@@ -888,8 +1108,9 @@ class UartMenu:
             print("8. Request register dump from FPGA")
             print("9. Send batch: write all registers")
             print("10. Start experiment")
-            print("11. Soft reset control bit")
+            print("11. Soft reset control bit (enabled here, disabled in web UI)")
             print("12. Help: packet formats")
+            print("13. Save or load JSON config file")
             print("q. Exit menu")
             print("==================================================")
             sel = input("Select: ").strip().lower()
@@ -921,6 +1142,8 @@ class UartMenu:
             elif sel == "12":
                 self._print_packet_formats()
                 self._pause()
+            elif sel == "13":
+                self._menu_json_config()
             elif sel == "q":
                 return
             else:

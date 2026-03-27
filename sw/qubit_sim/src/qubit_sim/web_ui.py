@@ -1,3 +1,12 @@
+##------------------------------------------------------------------------------
+## PROJECT: Quantum Computing FPGA Qubit Controller & Test Environment
+##------------------------------------------------------------------------------
+## Copyright (C) 2026 Sean Sandone
+## SPDX-License-Identifier: AGPL-3.0-or-later
+## Please see the LICENSE file for details.
+## WEBSITE: https://github.com/sean-sandone/qubit-fpga-kit
+##------------------------------------------------------------------------------
+
 from __future__ import annotations
 
 from flask import Flask, jsonify, redirect, render_template_string, request, url_for
@@ -183,6 +192,10 @@ PAGE_HTML = """
     .edit-box[hidden] {
       display: none !important;
     }
+    .edit-row td {
+      padding: 0 !important;
+      border-bottom: none !important;
+    }
     .form-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(180px, 1fr));
@@ -230,6 +243,16 @@ PAGE_HTML = """
       flex-wrap: wrap;
       justify-content: flex-end;
     }
+    .duel-tables {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    }
+    .duel-tables table {
+    flex: 1;
+    min-width: 280px;
+    }
     @media (max-width: 1300px) {
       .layout { grid-template-columns: 1fr; }
     }
@@ -242,6 +265,16 @@ PAGE_HTML = """
       const elem = document.getElementById(id);
       if (!elem) return;
       elem.hidden = !elem.hidden;
+    }
+
+    function toggleSection(id, buttonElem) {
+      const elem = document.getElementById(id);
+      if (!elem) return;
+      const isHidden = elem.hidden === true;
+      elem.hidden = !isHidden;
+      if (buttonElem) {
+        buttonElem.textContent = isHidden ? 'Hide' : 'Show';
+      }
     }
 
     function updateOperandField(selectElem, operandWrapId, currentValues) {
@@ -360,20 +393,50 @@ PAGE_HTML = """
     </div>
     <div class="actions">
       <form method="post" action="{{ url_for('action_route') }}">
-        <input type="hidden" name="action" value="reload_shadow">
-        <button type="submit">Reload shadow defaults</button>
+        <input type="hidden" name="action" value="refresh_data">
+        <button type="submit">Refresh Data</button>
       </form>
       <form method="post" action="{{ url_for('action_route') }}">
         <input type="hidden" name="action" value="send_all">
         <button type="submit">Send all registers</button>
       </form>
+      <button type="button" onclick="toggleEdit('json-file-box')">Save or load JSON</button>
       <form method="post" action="{{ url_for('action_route') }}">
         <input type="hidden" name="action" value="start_exp">
         <button type="submit">Start experiment</button>
       </form>
       <form method="post" action="{{ url_for('action_route') }}">
         <input type="hidden" name="action" value="soft_reset">
-        <button type="submit">Soft reset</button>
+        <button type="submit" disabled title="Soft reset is disabled for now">Soft reset</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="panel edit-box" id="json-file-box" hidden style="margin-bottom: 18px;">
+    <h2 style="margin-top:0;">JSON Config File</h2>
+    <div class="hint" style="margin-bottom:10px;">Save the current local writable configuration to a JSON file, or load a JSON file into the local shadow and send it to the FPGA.</div>
+    <div class="actions-inline">
+      <form method="post" action="{{ url_for('save_json_config_route') }}">
+        <div class="form-grid" style="min-width: 420px;">
+          <label>
+            Save file path
+            <input name="json_path" value="{{ state.json_default_path }}" placeholder="config/qubit_fpga_config.json">
+          </label>
+        </div>
+        <div class="actions-inline">
+          <button type="submit">Save JSON file</button>
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('load_json_config_route') }}">
+        <div class="form-grid" style="min-width: 420px;">
+          <label>
+            Load file path
+            <input name="json_path" value="{{ state.json_default_path }}" placeholder="config/qubit_fpga_config.json">
+          </label>
+        </div>
+        <div class="actions-inline">
+          <button type="submit">Load JSON file and send</button>
+        </div>
       </form>
     </div>
   </div>
@@ -463,15 +526,102 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
     </div>
 
     <div style="display:grid; gap: 18px; align-content:start;">
+    
       <div class="panel">
-        <h2 style="margin-top:0;">Control / Status</h2>
-        <div class="status-grid">
-          <div>start_exp</div><div>{{ state.control.start_exp }}</div>
-          <div>soft_reset</div><div>{{ state.control.soft_reset }}</div>
-          <div>reset_wait_cycles</div><div>{{ state.control.reset_wait_cycles }}</div>
-          <div>captured_packets</div><div>{{ state.control.captured_packets }}</div>
+        <h2 style="margin-top:0;">Status</h2>
+        <div class="duel-tables">
+            <table>
+            <tbody>
+                <tr><td>reset_wait_cycles</td><td>{{ state.control.reset_wait_cycles }}</td></tr>
+            </tbody>
+            </table>
+            <table>
+            <tbody>
+                <tr><td>captured_packets</td><td>{{ state.control.captured_packets }}</td></tr>
+            </tbody>
+            </table>
         </div>
       </div>
+
+      <div class="panel">
+        <div class="card-head" style="margin-bottom:0;">
+          <h2 style="margin:0;">Experiment Results</h2>
+          <button type="button" class="section-toggle" onclick="toggleSection('experiment-results-body', this)">Hide</button>
+        </div>
+        <div id="experiment-results-body">
+          <div class="hint" style="margin-top:10px;">Captured readout results are cleared when Start experiment is clicked.</div>
+
+          <table style="margin-top:10px;">
+            <tbody>
+              <tr><td>captured_results</td><td>{{ state.experiment_results.count }}</td></tr>
+            </tbody>
+          </table>
+
+          {% if state.experiment_results.count == 0 %}
+          <div class="note" style="margin-top:12px;">
+            No experiment results captured yet. Click Start experiment to begin collecting FPGA readout results.
+          </div>
+          {% else %}
+          <div class="plot-stack">
+            <div>
+              <div style="margin-bottom: 6px; color: var(--muted);">I_avg vs index of captured results</div>
+              <img src="{{ state.experiment_results.plots.i_avg }}" alt="I_avg experiment results plot">
+            </div>
+            <div>
+              <div style="margin-bottom: 6px; color: var(--muted);">Q_avg vs index of captured results</div>
+              <img src="{{ state.experiment_results.plots.q_avg }}" alt="Q_avg experiment results plot">
+            </div>
+            <div>
+              <div style="margin-bottom: 6px; color: var(--muted);">meas_state vs index of captured results</div>
+              <img src="{{ state.experiment_results.plots.meas_state }}" alt="meas_state experiment results plot">
+            </div>
+          </div>
+
+          <div class="results-table">
+            <table>
+              <thead>
+                <tr><th>Idx</th><th>I_avg_q2_14</th><th>Q_avg_q2_14</th><th>I_avg</th><th>Q_avg</th><th>meas_state</th></tr>
+              </thead>
+              <tbody>
+                {% for row in state.experiment_results.rows %}
+                <tr>
+                  <td>{{ row.index }}</td>
+                  <td>{{ row.I_avg_q2_14 }}</td>
+                  <td>{{ row.Q_avg_q2_14 }}</td>
+                  <td>{{ '%.6f'|format(row.I_avg) }}</td>
+                  <td>{{ '%.6f'|format(row.Q_avg) }}</td>
+                  <td>{{ row.meas_state }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+            
+      <div class="panel">
+        <h2 style="margin-top:0;">Calibration Registers</h2>
+        <div class="duel-tables">
+            <table>
+            <tbody>
+                <tr><th>Field</th><th>Raw</th><th>Value</th></tr>
+                {% for row in state.calibration_rows.left %}
+                <tr><td>{{ row.field }}</td><td>{{ row.raw }}</td><td>{{ row.value }}</td></tr>
+                {% endfor %}
+            </tbody>
+            </table>
+            <table>
+            <tbody>
+                <tr><th>Field</th><th>Raw</th><th>Value</th></tr>
+                {% for row in state.calibration_rows.right %}
+                <tr><td>{{ row.field }}</td><td>{{ row.raw }}</td><td>{{ row.value }}</td></tr>
+                {% endfor %}
+            </tbody>
+            </table>
+        </div>
+        <div class="hint" style="margin-top:10px;">Calibration registers are view only in this UI.</div>
+      </div>    
 
       <div class="panel">
         <h2 style="margin-top:0;">Measure Config Registers</h2>
@@ -488,7 +638,7 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
               <td>{{ cfg.ringup_ns }}</td>
               <td><button type="button" class="btn-small" onclick="toggleEdit('edit-measurecfg-{{ cfg.index }}')">Edit</button></td>
             </tr>
-            <tr>
+            <tr class="edit-row">
               <td colspan="5" style="padding-top:0;">
                 <div class="edit-box" id="edit-measurecfg-{{ cfg.index }}" hidden>
                   <form method="post" action="{{ url_for('edit_measure_cfg_route', index=cfg.index) }}">
@@ -543,7 +693,7 @@ detune_hz={{ cfg.summary.detune_hz }} envelope={{ cfg.summary.envelope }}</div>
               <td>{{ instr.operand }}</td>
               <td><button type="button" class="btn-small" onclick="toggleEdit('edit-instr-{{ instr.index }}')">Edit</button></td>
             </tr>
-            <tr>
+            <tr class="edit-row">
               <td colspan="7" style="padding-top:0;">
                 <div class="edit-box" id="edit-instr-{{ instr.index }}" hidden data-instr-editor="1">
                   <form method="post" action="{{ url_for('edit_instruction_route', index=instr.index) }}">
@@ -645,6 +795,70 @@ def _hex_u32(x: int) -> str:
     return f"0x{int(x) & 0xFFFFFFFF:08X}"
 
 
+def _q2_14_to_float(value: int) -> float:
+    return float(int(value)) / 16384.0
+
+
+def _format_calibration_value(field: str, raw_value: int) -> str:
+    raw_value = int(raw_value)
+    if field == "cal_sample_count":
+        return f"{raw_value} samples"
+    if field in (
+        "cal_i_avg",
+        "cal_q_avg",
+        "cal_i0_ref",
+        "cal_q0_ref",
+        "cal_i1_ref",
+        "cal_q1_ref",
+        "cal_i_threshold",
+    ):
+        return f"{_q2_14_to_float(raw_value):.6f} FS (Q2.14)"
+    if field == "cal_state_polarity":
+        return "1 = positive state" if raw_value else "0 = negative state"
+    if field in ("cal_i0q0_valid", "cal_i1q1_valid", "cal_threshold_valid", "meas_state_valid"):
+        return "valid" if raw_value else "not valid"
+    if field == "meas_state":
+        return "state 1" if raw_value else "state 0"
+    return str(raw_value)
+
+
+def _build_calibration_rows(calibration: dict) -> dict:
+    left_fields = [
+        "cal_i_threshold",
+        "cal_state_polarity",
+        "cal_i0q0_valid",
+        "cal_i1q1_valid",
+        "cal_threshold_valid",
+        "meas_state",
+        "meas_state_valid",
+    ]
+    right_fields = [
+        "cal_sample_count",
+        "cal_i_avg",
+        "cal_q_avg",
+        "cal_i0_ref",
+        "cal_q0_ref",
+        "cal_i1_ref",
+        "cal_q1_ref",
+    ]
+
+    def _rows(fields):
+        rows = []
+        for field in fields:
+            raw_value = int(calibration.get(field, 0))
+            rows.append({
+                "field": field,
+                "raw": raw_value,
+                "value": _format_calibration_value(field, raw_value),
+            })
+        return rows
+
+    return {
+        "left": _rows(left_fields),
+        "right": _rows(right_fields),
+    }
+
+
 def _decode_instr_word(word: int) -> dict:
     word = int(word) & 0xFFFFFFFF
     opcode = (word >> 28) & 0xF
@@ -674,6 +888,8 @@ class WebUiApp:
     def _build_page_state(self):
         state = self.viewer.get_state_snapshot()
         state["opcode_options"] = OPCODE_OPTIONS
+        state["calibration_rows"] = _build_calibration_rows(state.get("calibration", {}))
+        state["json_default_path"] = "config/qubit_fpga_config.json"
 
         if self._menu is None:
             return state
@@ -731,8 +947,8 @@ class WebUiApp:
         @self.app.post('/action')
         def action_route():
             action = str(request.form.get('action', '')).strip().lower()
-            if action == 'reload_shadow':
-                self.viewer.reload_from_menu_shadow()
+            if action == 'refresh_data':
+                self.viewer.request_register_dump()
             elif action == 'send_all':
                 self.viewer.send_all_registers()
             elif action == 'start_exp':
@@ -805,6 +1021,24 @@ class WebUiApp:
             self.viewer.load_from_shadow(self._menu)
             return redirect(url_for('index', _anchor=f'instr-{index}'))
 
+        @self.app.post('/json/save')
+        def save_json_config_route():
+            if self._menu is not None:
+                json_path = str(request.form.get('json_path', 'config/qubit_fpga_config.json')).strip() or 'config/qubit_fpga_config.json'
+                self._menu.save_json_config_file(json_path)
+                self.viewer.load_from_shadow(self._menu)
+            return redirect(url_for('index'))
+
+        @self.app.post('/json/load')
+        def load_json_config_route():
+            if self._menu is not None:
+                json_path = str(request.form.get('json_path', 'config/qubit_fpga_config.json')).strip() or 'config/qubit_fpga_config.json'
+                self._menu.load_json_config_file(json_path, send_to_fpga=True)
+                self.viewer.load_from_shadow(self._menu)
+            return redirect(url_for('index'))
+
+        self.save_json_config_route = save_json_config_route
+        self.load_json_config_route = load_json_config_route
         self.action_route = action_route
         self.edit_play_cfg_route = edit_play_cfg_route
         self.edit_measure_cfg_route = edit_measure_cfg_route
@@ -820,6 +1054,26 @@ class WebUiApp:
 
     def post_packet(self, label: str, packet: bytes) -> None:
         self.viewer.post_packet(label, packet)
+
+    def clear_experiment_results(self) -> None:
+        self.viewer.clear_experiment_results()
+
+    def capture_measure_result(
+        self,
+        *,
+        i_avg_q2_14: int,
+        q_avg_q2_14: int,
+        i_avg: float,
+        q_avg: float,
+        meas_state: int,
+    ) -> None:
+        self.viewer.capture_measure_result(
+            i_avg_q2_14=i_avg_q2_14,
+            q_avg_q2_14=q_avg_q2_14,
+            i_avg=i_avg,
+            q_avg=q_avg,
+            meas_state=meas_state,
+        )
 
     def run(self) -> None:
         self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False)

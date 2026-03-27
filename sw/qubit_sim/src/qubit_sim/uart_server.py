@@ -428,6 +428,7 @@ def _process_rx_text_line(
     ser,
     debug: bool,
     log_path: Optional[Path],
+    ui_app=None,
 ) -> None:
     if not rx_text:
         return
@@ -458,6 +459,18 @@ def _process_rx_text_line(
 
         if log_path is not None:
             _debug_log(debug_line, debug=False, log_path=log_path)
+
+        if (
+            ui_app is not None
+            and str(obj.get("msg", "")).strip().lower() == "readout processed"
+        ):
+            ui_app.capture_measure_result(
+                i_avg_q2_14=_parse_int_like(obj.get("I_avg", 0)),
+                q_avg_q2_14=_parse_int_like(obj.get("Q_avg", 0)),
+                i_avg=_q2_14_i16_to_float(obj.get("I_avg", 0)),
+                q_avg=_q2_14_i16_to_float(obj.get("Q_avg", 0)),
+                meas_state=1 if _parse_int_like(obj.get("meas_state", 0)) != 0 else 0,
+            )
 
         return
 
@@ -639,6 +652,7 @@ class _MixedRxParser:
                     ser=self._ser,
                     debug=self.debug,
                     log_path=self.log_path,
+                    ui_app=self.ui_app,
                 )
             return
 
