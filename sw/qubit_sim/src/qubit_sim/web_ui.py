@@ -420,7 +420,7 @@ PAGE_HTML = """
         <div class="form-grid" style="min-width: 420px;">
           <label>
             Save file path
-            <input name="json_path" value="{{ state.json_default_path }}" placeholder="qubit_fpga_config.json">
+            <input name="json_path" value="{{ state.json_default_path }}" placeholder="config/qubit_fpga_config.json">
           </label>
         </div>
         <div class="actions-inline">
@@ -431,7 +431,7 @@ PAGE_HTML = """
         <div class="form-grid" style="min-width: 420px;">
           <label>
             Load file path
-            <input name="json_path" value="{{ state.json_default_path }}" placeholder="qubit_fpga_config.json">
+            <input name="json_path" value="{{ state.json_default_path }}" placeholder="config/qubit_fpga_config.json">
           </label>
         </div>
         <div class="actions-inline">
@@ -889,7 +889,7 @@ class WebUiApp:
         state = self.viewer.get_state_snapshot()
         state["opcode_options"] = OPCODE_OPTIONS
         state["calibration_rows"] = _build_calibration_rows(state.get("calibration", {}))
-        state["json_default_path"] = "qubit_fpga_config.json"
+        state["json_default_path"] = "config/qubit_fpga_config.json"
 
         if self._menu is None:
             return state
@@ -1024,7 +1024,7 @@ class WebUiApp:
         @self.app.post('/json/save')
         def save_json_config_route():
             if self._menu is not None:
-                json_path = str(request.form.get('json_path', 'qubit_fpga_config.json')).strip() or 'qubit_fpga_config.json'
+                json_path = str(request.form.get('json_path', 'config/qubit_fpga_config.json')).strip() or 'config/qubit_fpga_config.json'
                 self._menu.save_json_config_file(json_path)
                 self.viewer.load_from_shadow(self._menu)
             return redirect(url_for('index'))
@@ -1032,7 +1032,7 @@ class WebUiApp:
         @self.app.post('/json/load')
         def load_json_config_route():
             if self._menu is not None:
-                json_path = str(request.form.get('json_path', 'qubit_fpga_config.json')).strip() or 'qubit_fpga_config.json'
+                json_path = str(request.form.get('json_path', 'config/qubit_fpga_config.json')).strip() or 'config/qubit_fpga_config.json'
                 self._menu.load_json_config_file(json_path, send_to_fpga=True)
                 self.viewer.load_from_shadow(self._menu)
             return redirect(url_for('index'))

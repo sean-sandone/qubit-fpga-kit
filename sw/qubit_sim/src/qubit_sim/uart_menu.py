@@ -1065,7 +1065,7 @@ class UartMenu:
                 print("Unknown selection")
 
     def _menu_json_config(self) -> None:
-        default_path = "qubit_fpga_config.json"
+        default_path = "config/qubit_fpga_config.json"
 
         while True:
             print()
