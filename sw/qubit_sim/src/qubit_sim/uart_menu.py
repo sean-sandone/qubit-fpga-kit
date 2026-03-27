@@ -457,9 +457,10 @@ class UartMenu:
     def _send_packet(self, label: str, pkt: bytes) -> None:
         self._send_packet_cb(label, pkt)
 
-    def _send_and_confirm(self, label: str, pkt: bytes) -> None:
+    def _send_with_optional_confirm(self, label: str, pkt: bytes, confirm: bool = True) -> None:
         self._send_packet(label, pkt)
-        self.request_register_dump()
+        if confirm:
+            self.request_register_dump()
 
     def request_register_dump(self) -> None:
         self._send_packet("CONTROL_READ_ALL", self.build_read_all_packet())
@@ -468,39 +469,55 @@ class UartMenu:
         pkt = self.build_control_packet(self.shadow.start_exp, self.shadow.soft_reset, 0)
         self._send_packet("CONTROL", pkt)
 
-    def send_reset_wait(self) -> None:
+    def send_reset_wait(self, confirm: bool = True) -> None:
         pkt = self.build_reset_wait_packet(self.shadow.reset_wait_cycles)
-        self._send_and_confirm("RESET_WAIT", pkt)
+        self._send_with_optional_confirm("RESET_WAIT", pkt, confirm=confirm)
 
-    def send_play_cfg(self, index: int) -> None:
+    def send_play_cfg(self, index: int, confirm: bool = True) -> None:
         pkt = self.build_play_cfg_packet(index, self.shadow.play_cfgs[index])
-        self._send_and_confirm(f"PLAY_CFG[{index}]", pkt)
+        self._send_with_optional_confirm(f"PLAY_CFG[{index}]", pkt, confirm=confirm)
 
-    def send_measure_cfg(self, index: int) -> None:
+    def send_measure_cfg(self, index: int, confirm: bool = True) -> None:
         pkt = self.build_measure_cfg_packet(index, self.shadow.measure_cfgs[index])
-        self._send_and_confirm(f"MEASURE_CFG[{index}]", pkt)
+        self._send_with_optional_confirm(f"MEASURE_CFG[{index}]", pkt, confirm=confirm)
 
-    def send_instr(self, index: int) -> None:
+    def send_instr(self, index: int, confirm: bool = True) -> None:
         pkt = self.build_instr_packet(index, self.shadow.instr_words[index])
-        self._send_and_confirm(f"INSTR[{index}]", pkt)
+        self._send_with_optional_confirm(f"INSTR[{index}]", pkt, confirm=confirm)
 
     def send_all_play_cfgs(self) -> None:
+        wrote_any = False
         for idx in range(PlayCfgDepth):
-            self.send_play_cfg(idx)
+            self.send_play_cfg(idx, confirm=False)
+            wrote_any = True
+        if wrote_any:
+            self.request_register_dump()
 
     def send_all_measure_cfgs(self) -> None:
+        wrote_any = False
         for idx in range(MeasureCfgDepth):
-            self.send_measure_cfg(idx)
+            self.send_measure_cfg(idx, confirm=False)
+            wrote_any = True
+        if wrote_any:
+            self.request_register_dump()
 
     def send_all_instr(self) -> None:
+        wrote_any = False
         for idx in range(InstrDepth):
-            self.send_instr(idx)
+            self.send_instr(idx, confirm=False)
+            wrote_any = True
+        if wrote_any:
+            self.request_register_dump()
 
     def send_all_registers(self) -> None:
-        self.send_reset_wait()
-        self.send_all_play_cfgs()
-        self.send_all_measure_cfgs()
-        self.send_all_instr()
+        self.send_reset_wait(confirm=False)
+        for idx in range(PlayCfgDepth):
+            self.send_play_cfg(idx, confirm=False)
+        for idx in range(MeasureCfgDepth):
+            self.send_measure_cfg(idx, confirm=False)
+        for idx in range(InstrDepth):
+            self.send_instr(idx, confirm=False)
+        self.request_register_dump()
 
     def send_start_experiment_pulse(self) -> None:
         pkt = self.build_control_packet(1, 0, 0)
@@ -559,9 +576,12 @@ class UartMenu:
             "format": "qubit-fpga-config",
             "version": 1,
             "reset_wait_cycles": int(self.shadow.reset_wait_cycles),
-            "play_cfgs": [self._play_cfg_to_dict(cfg) for cfg in self.shadow.play_cfgs],
+            "play_cfgs": [
+                self._play_cfg_to_dict(self.shadow.play_cfgs[idx]) if int(self.shadow.play_cfg_valid[idx]) != 0 else None
+                for idx in range(PlayCfgDepth)
+            ],
             "measure_cfgs": [self._measure_cfg_to_dict(cfg) for cfg in self.shadow.measure_cfgs],
-            "instr_words": [int(word) & 0xFFFFFFFF for word in self.shadow.instr_words],
+            "instr_words": [f"0x{(int(word) & 0xFFFFFFFF):08X}" for word in self.shadow.instr_words],
         }
 
     def apply_json_config_dict(self, data: Dict[str, object], *, send_to_fpga: bool = True) -> None:
@@ -583,8 +603,12 @@ class UartMenu:
         self.shadow.reset_wait_cycles = int(reset_wait_cycles)
 
         if isinstance(play_cfgs, list):
-            for idx in range(min(len(play_cfgs), PlayCfgDepth)):
-                raw_cfg = play_cfgs[idx]
+            for idx in range(PlayCfgDepth):
+                raw_cfg = play_cfgs[idx] if idx < len(play_cfgs) else None
+                if raw_cfg is None:
+                    self.shadow.play_cfg_valid[idx] = 0
+                    self.shadow.play_cfgs[idx] = PlayCfg()
+                    continue
                 if not isinstance(raw_cfg, dict):
                     continue
                 self.shadow.play_cfgs[idx] = PlayCfg(
@@ -596,6 +620,7 @@ class UartMenu:
                     detune_hz=self._parse_int(raw_cfg.get("detune_hz", 0), self.shadow.play_cfgs[idx].detune_hz),
                     envelope=str(raw_cfg.get("envelope", self.shadow.play_cfgs[idx].envelope)).strip().upper() or self.shadow.play_cfgs[idx].envelope,
                 )
+                self.shadow.play_cfg_valid[idx] = 1
 
         if isinstance(measure_cfgs, list):
             for idx in range(min(len(measure_cfgs), MeasureCfgDepth)):
@@ -613,7 +638,15 @@ class UartMenu:
                 self.shadow.instr_words[idx] = self._parse_int(instr_words[idx], self.shadow.instr_words[idx]) & 0xFFFFFFFF
 
         if send_to_fpga:
-            self.send_all_registers()
+            self.send_reset_wait(confirm=False)
+            for idx in range(PlayCfgDepth):
+                if int(self.shadow.play_cfg_valid[idx]) != 0:
+                    self.send_play_cfg(idx, confirm=False)
+            for idx in range(MeasureCfgDepth):
+                self.send_measure_cfg(idx, confirm=False)
+            for idx in range(InstrDepth):
+                self.send_instr(idx, confirm=False)
+            self.request_register_dump()
 
     def save_json_config_file(self, path_text: str) -> Path:
         path = self._normalize_json_path(path_text)

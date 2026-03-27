@@ -199,7 +199,13 @@ class PacketMirror:
 
 class WaveformRenderer:
     def __init__(self, fs_hz: float = 1.0e9, if_hz: float = 50.0e6):
-        self.fpga = VirtualFPGA(fs_hz=fs_hz, if_hz=if_hz)
+        self.fs_hz = float(fs_hz)
+        self.if_hz = float(if_hz)
+
+        # Use a higher sample rate for preview rendering so the carrier looks
+        # smooth even when the runtime/sample transport rate is lower.
+        self.preview_fs_hz = max(self.fs_hz, 40.0 * self.if_hz, 1.0e9)
+        self.fpga = VirtualFPGA(fs_hz=self.preview_fs_hz, if_hz=self.if_hz)
 
     @staticmethod
     def q8_8_to_float(value: int) -> float:
