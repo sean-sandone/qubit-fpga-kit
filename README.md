@@ -17,7 +17,7 @@ The system is designed to keep setup simple and low cost, requiring only a USB/U
 - [Theory of Operation](docs/theory_of_operation.md)
 - [Register Map](docs/register_map.md)
 - [Instruction Set](docs/instruction_set.md)
-- 
+
 ## Requirements
 
 - Python 3.10+
