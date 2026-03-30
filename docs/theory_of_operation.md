@@ -1,0 +1,13 @@
+#Theory of Operation
+
+The FPGA serves as the real-time experiment controller, supporting the full control loop by orchestrating qubit control pulses and receiving, processing, and evaluating qubit measurement data. Transmitting fully sampled I/Q waveforms over a low-speed UART link would be impractical, so a "Virtual FPGA Waveform Generator" is implemented in software. This software layer takes compact waveform descriptions sent by the FPGA and expands them into the pulse waveforms ultimately applied to a simulated qubit in the QuTiP environment. This design keeps the system accessible and inexpensive by enabling development on a simple FPGA evaluation board while preserving the control flow of a pulse-programmed quantum experiment. Because the project's primary goal is to validate sequencing, control, measurement, and calibration behavior, rather than implement a high-speed RF signal chain, waveform synthesis was intentionally moved into software.
+
+##Qubit Control via I/Q Pulses
+
+I/Q pulses are used because microwave qubit control is naturally expressed in terms of two orthogonal signal components: an in-phase (I) component and a quadrature (Q) component. Together, these components let the control system set the amplitude and phase of the applied drive, which is how shaped qubit-control pulses are commonly generated in superconducting-qubit systems. As one recent superconducting-qubit control paper puts it, these pulses are "most commonly synthesized by up-converting and superimposing" the I and Q components.
+- J. Herrmann et al., *"Frequency Up-Conversion Schemes for Controlling Superconducting Qubits,"* 2022. [arXiv:2210.02513](https://arxiv.org/abs/2210.02513)
+
+##Average ∣0⟩ and ∣1⟩ state calibration
+
+Averaged I/Q measurement data is used for calibration because the readout responses for prepared  |0⟩ and ∣1⟩ states form distinguishable I/Q clusters. Repeated measurements of these known states allow the system to estimate average reference responses, which can then be used for discrimination or thresholding in later measurements. This is consistent with standard readout calibration methods such as Qiskit Experiments' ReadoutAngle procedure, which uses the ground-state and excited-state I/Q cluster centers to determine a readout discrimination angle.
+- Qiskit Experiments, *ReadoutAngle: an experiment to measure the angle between ground-state and excited-state I/Q clusters.* [Documentation](https://qiskit-community.github.io/qiskit-experiments/stubs/qiskit_experiments.library.characterization.ReadoutAngle.html)

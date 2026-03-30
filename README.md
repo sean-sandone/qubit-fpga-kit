@@ -1,198 +1,151 @@
 # Quantum Computing FPGA Qubit Controller & Test Environment
 
-A FPGA based Quantum Computing Qubit Controller test and expirmentation suite using a Xilinx evaulation board and PC or server running QuTIP qubit simulations. Features simple communcation between FPGA and qubit simualtion via USB/UART connection.  The RTL (FPGA based logic) can send humnan readable JSON debug strings for easy bring-up and debug by just monitoring a com port with terminal software or included, custom python software.  Simple menu based UI for loading registers, instruction memory, calibrating |0> & |1> states, and running expirments.
+This project is an FPGA-based qubit-control and experimentation platform built using a Xilinx evaluation board and a host PC running QuTiP simulations. It provides a practical environment for developing and testing pulse sequencing, measurement, calibration, and control-loop behavior using real FPGA hardware and QuTiP qubit simulations.
+
+The system is designed to keep setup simple and low cost, requiring only a USB/UART link between the FPGA and the host. To support easy bring-up and debugging, the hardware can generate human-readable JSON debug output that can be monitored with your favorite serial terminal software or the included Python tools. An intuitive browser-based web UI and a command-line menu interface are provided for loading register values, programming instruction memory, calibrating |0> and |1> reference states, and running experiments.
 
 ![qubit-fpga-kit top level block diagram](docs/diagrams/qu%20control.drawio.svg)
 
+## Requirements
+
+- Python 3.10+
+- A Xilinx FPGA evaluation board with onboard UART USB interface
+- A USB/UART connection between the FPGA board and host PC
+
 ## Setup
 
-Coming Soon
+### 1. Clone the repository
 
-## Running Expirments
+```bash
+git clone https://github.com/sean-sandone/qubit-fpga-kit.git
+cd qubit-fpga-kit
+```
 
-From the `sw\qubit_sim\src directory` 
-run `python -m qubit_sim.uart_server --port COM<com port #> --debug --log_file <logfile name>`
+### 2. Create or activate a Python environment with QuTiP support
 
-## Register Map
+Use a Python environment that has QuTiP installed and will be used to run the host software.
 
-> Note: this design currently uses a **logical register bank plus small config/instruction memories**, not a flat memory-mapped address space.  
-> Play config, measure config, and instruction entries are written by index.  
-> Control updates are also supported over UART packet types `0x10` to `0x14`.
+Example with conda:
 
-### Control and Status Registers
+```bash
+conda create -n qutip python=3.11
+conda activate qutip
+```
 
-| Register / Signal | Width | Access | Description |
-|---|---:|---|---|
-| `start_exp` | 1 | W / R | Start experiment request. Set by control write. Cleared by sequencer handshake (`clear_start_exp`). |
-| `soft_reset_req` | 1 | W pulse / R | Soft reset request pulse generated from control write. |
-| `reset_wait_cycles` | 32 | W / R | Default wait used by `OP_WAIT_RESET` after issuing the reset command to the PC/Qutip side. |
-| `seq_busy` | 1 | R | Sequencer busy status. High while an experiment program is running. |
-| `seq_done_sticky` | 1 | R | Sticky done flag. Set when the sequencer reaches `OP_END`. Cleared when a new experiment is started. |
-| `play_cfg_any_valid` | 1 | R | High if any play configuration slot has been written. |
-| `measure_cfg_any_valid` | 1 | R | High if any measure configuration slot has been written. |
-| `instr_any_valid` | 1 | R | High if any instruction slot has been written. |
+If you already have a working QuTiP environment, activate that instead.
 
-### Calibration Result Registers
+### 3. Install Python dependencies
 
-| Register / Signal | Width | Access | Description |
-|---|---:|---|---|
-| `cal_sample_count` | 16 | R | Number of samples accumulated for the most recent calibration average result. |
-| `cal_i_avg` | 16 signed | R | Most recent calibration average I result. |
-| `cal_q_avg` | 16 signed | R | Most recent calibration average Q result. |
-| `cal_i0_ref` | 16 signed | R | Stored calibration I reference for the `|0>` state. |
-| `cal_q0_ref` | 16 signed | R | Stored calibration Q reference for the `|0>` state. |
-| `cal_i1_ref` | 16 signed | R | Stored calibration I reference for the `|1>` state. |
-| `cal_q1_ref` | 16 signed | R | Stored calibration Q reference for the `|1>` state. |
-| `cal_i_threshold` | 16 signed | R | Threshold derived from the midpoint of `cal_i0_ref` and `cal_i1_ref`. |
-| `cal_state_polarity` | 1 | R | Comparison polarity used for state classification. `1` means `I >= threshold` maps to `|1>`, `0` means `I < threshold` maps to `|1>`. |
-| `cal_i0q0_valid` | 1 | R | High once the `|0>` calibration reference has been captured. |
-| `cal_i1q1_valid` | 1 | R | High once the `|1>` calibration reference has been captured. |
-| `cal_threshold_valid` | 1 | R | High once both references exist and the threshold has been computed. |
+Install the required Python packages:
 
-### Measurement State Registers
+```bash
+pip install numpy qutip pyserial flask matplotlib
+```
 
-| Register / Signal | Width | Access | Description |
-|---|---:|---|---|
-| `meas_state` | 1 | R | Classified measurement state from the latest measurement, based on `meas_i_avg_in` and the calibration threshold. |
-| `meas_state_valid` | 1 | R | High when `meas_state` is valid. Cleared by `clear_meas_state_valid`. |
+### 4. Install the project package
 
-### Calibration Debug Registers / Pulses
+From the repository root, install the project in editable mode:
 
-| Register / Signal | Width | Access | Description |
-|---|---:|---|---|
-| `cal_debug_update_pulse` | 1 | R pulse | Pulses when a calibration reference register is updated. |
-| `cal_debug_ref0_sel` | 1 | R | Indicates which reference was most recently updated. `1 = ref0`, `0 = ref1`. |
+```bash
+pip install -e .
+```
 
----
+This is recommended because the host application is launched as a Python module:
 
-## Play Configuration Memory
+```bash
+python -m qubit_sim.uart_server --port COM<your port #> --debug --log_file <log file name> --ui --ui_host 127.0.0.1 --ui_port 5000
+```
 
-Depth: **8 entries** (`PlayCfgDepth = 8`)
+### 5. Connect the FPGA hardware
 
-Each entry is a `play_cfg_t`.
+You will need:
 
-| Field | Width | Description |
-|---|---:|---|
-| `amp_q8_8` | 16 | Pulse amplitude in Q8.8 fixed-point format. |
-| `phase_q8_8` | 16 | Pulse phase in Q8.8 fixed-point format. |
-| `duration_ns` | 32 | Pulse duration in ns. |
-| `sigma_ns` | 32 | Gaussian sigma in ns. |
-| `pad_ns` | 32 | Extra padding time in ns. |
-| `detune_hz` | 32 | Frequency detune in Hz. |
-| `envelope` | 4 | Envelope type. `0 = SQUARE`, `1 = GAUSS`. |
+- A Xilinx FPGA evaluation board programmed with the project bitstream and using the onboard UART interface
+- This project is built on the KCU105 evaluation board but can be run on any FPGA board with a UART/USB interface by simply updating the pinout constraints for your board
+- A USB connection between the FPGA board and the host PC
+- The UART serial port driver for your system and associated COM port
 
----
+### 6. Run the host software
 
-## Measure Configuration Memory
+Start the UART server with your FPGA serial port:
 
-Depth: **4 entries** (`MeasCfgDepth = 4`)
+```bash
+python -m qubit_sim.uart_server --port COM<your port #> --debug --log_file <log file name> --ui --ui_host 127.0.0.1 --ui_port 5000
+```
 
-Each entry is a `measure_cfg_t`.
+Useful command-line options include:
 
-| Field | Width | Description |
-|---|---:|---|
-| `n_readout` | 16 | Number of downsampled readout samples expected. |
-| `readout_ns` | 32 | Readout duration in ns. |
-| `ringup_ns` | 32 | Readout ring-up time in ns. |
+- `--baud` default `115200`
+- `--fs_hz` default `250e6`
+- `--if_hz` default `50e6`
+- `--omega_max_hz` default `2e6`
+- `--timeout_s` default `0.2`
+- `--debug`
+- `--log_file <path>`
+- `--ui`
+- `--ui_host` default `127.0.0.1`
+- `--ui_port` default `5000`
 
----
+Example with debug logging and the web UI enabled:
 
-## Instruction Memory
+```bash
+python -m qubit_sim.uart_server --port COM6 --debug --log_file test.log --ui --ui_host 127.0.0.1 --ui_port 5000
+```
 
-Depth: **32 entries** (`InstrDepth = 32`)
+### 7. Use the command-line menu
 
-Each entry is an `instr_t`.
+When the UART server is running, press:
 
-| Field | Width | Description |
-|---|---:|---|
-| `opcode` | 4 | Instruction opcode. |
-| `flags` | 4 | Reserved for future use. Present in the instruction format but not currently used by the sequencer logic. |
-| `cfg_index` | 4 | Selects the play or measure config entry used by the instruction. |
-| `operand` | 20 | Opcode-specific operand field. |
+```text
+m
+```
 
----
+to open the interactive UART menu.
 
-## Instruction Set
+The menu supports:
 
-| Opcode | Value | Uses `cfg_index` | Uses `operand` | Description |
-|---|---:|---:|---:|---|
-| `OP_NOP` | `0` | No | No | No operation. Advances to the next instruction. |
-| `OP_PLAY` | `1` | Yes | No | Sends a `PLAY` command to the PC/Qutip side using the selected play config. |
-| `OP_MEASURE` | `2` | Yes | No | Sends a `MEASURE` command using the selected measure config and waits for a measurement response packet. |
-| `OP_WAIT` | `3` | No | Yes | Waits for `operand` clock cycles. If `operand == 0`, it behaves like a no-op. |
-| `OP_END` | `4` | No | No | Ends the program and raises the sequencer done pulse. |
-| `OP_JUMP` | `5` | No | Yes | Sets the program counter to `operand[InstrAw-1:0]`. |
-| `OP_WAIT_RESET` | `6` | No | No | Sends a reset command to the PC/Qutip side, then waits for `reset_wait_cycles`. |
-| `OP_ACCUM_CLEAR` | `7` | No | No | Clears the calibration accumulator state. |
-| `OP_ACCUM` | `8` | No | No | Pushes the latest measured I/Q average into the calibration accumulator. |
-| `OP_ACCUM_AVG` | `9` | No | Yes | Finalizes the calibration accumulator average and stores the result according to `operand[1:0]`. |
-| `OP_LOOP` | `10` | No | Yes | Loop control. On first encounter, loads loop count from `operand[19:8]` and target PC from the low instruction address bits, then branches to the target. Repeats until the loop count expires. |
+- showing the current register summary
+- writing control, reset-wait, play, measure, and instruction values
+- requesting a register dump
+- batch sending all writable registers
+- starting an experiment
+- saving and loading JSON config files
 
-### Opcode Operand Encoding Notes
+### 8. Use the web UI
 
-| Opcode | Operand Encoding |
-|---|---|
-| `OP_WAIT` | `operand = wait_cycles` |
-| `OP_JUMP` | `operand[InstrAw-1:0] = target_instruction_address` |
-| `OP_ACCUM_AVG` | `operand[1:0]` selects destination: `0 = TEMP`, `1 = REF0`, `2 = REF1` |
-| `OP_LOOP` | `operand[19:8] = loop_count`, low instruction address bits = loop target address |
+If started with `--ui`, the web UI binds by default to:
 
----
+```text
+http://127.0.0.1:5000
+```
 
-## UART Register Write Packet Types
+The UI provides:
 
-These packet types are decoded by `write_reg_rx` and drive updates into the register bank.
+- live mirrored register and control state
+- editable play config, measure config, and instruction memory fields
+- generated waveform previews
+- experiment result plots
+- JSON config save/load actions
 
-| Packet Type | Value | Payload | Effect |
-|---|---:|---|---|
-| `RegWrTypeControl` | `0x10` | 1 byte | Control bits: bit 0 = `start_exp`, bit 1 = `soft_reset` |
-| `RegWrTypeResetWait` | `0x11` | 4 bytes LE | Writes `reset_wait_cycles` |
-| `RegWrTypePlayCfg` | `0x12` | `addr(1) + amp(2) + phase(2) + duration(4) + sigma(4) + pad(4) + detune(4) + envelope(1)` | Writes one play config entry |
-| `RegWrTypeMeasureCfg` | `0x13` | `addr(1) + n_readout(2) + readout_ns(4) + ringup_ns(4)` | Writes one measure config entry |
-| `RegWrTypeInstr` | `0x14` | `addr(1) + instr_word(4)` | Writes one instruction entry |
+### 9. JSON config files
 
----
+The host software supports saving and loading configuration data as JSON. The default path used in both the menu and web UI is:
 
-## Default Power-Up Contents
+```text
+config/qubit_fpga_config.json
+```
 
-When `LoadDefaultsAfterReset = 1`, the init loader preloads the register bank and memories from `defaults_rom`.
+Loading a JSON config updates the local shadow values and sends writable registers back to the FPGA.
 
-### Default Play Configs
+## Notes
 
-| Index | Summary |
-|---:|---|
-| `0` | Gaussian pulse, amp `0x0100` (1.0), phase `0x0000`, duration `200 ns`, sigma `30 ns`, pad `200 ns`, detune `0 Hz` |
-| `1` | Gaussian pulse, amp `0x0330` (3.1875), phase `0x0000`, duration `200 ns`, sigma `30 ns`, pad `200 ns`, detune `0 Hz` |
-| `2` | Gaussian pulse, amp `0x0080` (0.5), phase `0x0100`, duration `200 ns`, sigma `30 ns`, pad `200 ns`, detune `0 Hz` |
+- The host-side Virtual FPGA expands compact pulse descriptions into DAC-style I/Q waveforms rather than requiring the FPGA to stream fully sampled waveforms over UART.
+- The qubit simulator converts those I/Q waveforms into a baseband complex envelope and evolves the qubit state in QuTiP.
+- The UART text command path currently supports `PING`, `RESET`, `PLAY`, and `MEASURE`. `PLAY` renders and applies a pulse, while `MEASURE` returns readout waveform samples.
+- Returned readout waveform data is packed into a binary UART packet using interleaved signed Q2.14 I/Q samples with header `[0xA5][0x5A][0x02][N]`.
 
-### Default Measure Configs
+## Documentation
 
-| Index | Summary |
-|---:|---|
-| `0` | `n_readout = 64`, `readout_ns = 1024`, `ringup_ns = 512` |
-| `1` | `n_readout = 64`, `readout_ns = 1024`, `ringup_ns = 256` |
-
-### Default Reset Wait
-
-| Register | Value |
-|---|---:|
-| `reset_wait_cycles` | `1000` |
-
-### Default Instruction Program
-
-| Addr | Instruction | Summary |
-|---:|---|---|
-| `0` | `ACCUM_CLEAR` | Clear accumulator before `|0>` calibration |
-| `1` | `WAIT_RESET` | Reset / wait before `|0>` measurement |
-| `2` | `MEASURE cfg=0` | Measure `|0>` reference |
-| `3` | `ACCUM` | Accumulate the result |
-| `4` | `LOOP operand=0x00201` | Repeat body starting at addr `1` |
-| `5` | `ACCUM_AVG operand=1` | Store average into `REF0` |
-| `6` | `ACCUM_CLEAR` | Clear accumulator before `|1>` calibration |
-| `7` | `WAIT_RESET` | Reset / wait before `|1>` preparation |
-| `8` | `PLAY cfg=1` | Apply `|1>` prep pulse |
-| `9` | `MEASURE cfg=0` | Measure `|1>` reference |
-| `10` | `ACCUM` | Accumulate the result |
-| `11` | `LOOP` | Repeat `|1>` calibration body |
-| `12` | `ACCUM_AVG operand=2` | Store average into `REF1` |
-| `13` | `END` | Finish |
+- [Theory of Operation](docs/theory_of_operation.md)
+- [Register Map](docs/register_map.md)
+- [Instruction Set](docs/instruction_set.md)
