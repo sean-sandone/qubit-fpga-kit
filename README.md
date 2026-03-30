@@ -12,6 +12,12 @@ The system is designed to keep setup simple and low cost, requiring only a USB/U
 
 ![Sample Web UI](docs/images/sample_web_ui.PNG)
 
+## Documentation
+
+- [Theory of Operation](docs/theory_of_operation.md)
+- [Register Map](docs/register_map.md)
+- [Instruction Set](docs/instruction_set.md)
+- 
 ## Requirements
 
 - Python 3.10+
@@ -150,8 +156,3 @@ Loading a JSON config updates the local shadow values and sends writable registe
 - The UART text command path currently supports `PING`, `RESET`, `PLAY`, and `MEASURE`. `PLAY` renders and applies a pulse, while `MEASURE` returns readout waveform samples.
 - Returned readout waveform data is packed into a binary UART packet using interleaved signed Q2.14 I/Q samples with header `[0xA5][0x5A][0x02][N]`.
 
-## Documentation
-
-- [Theory of Operation](docs/theory_of_operation.md)
-- [Register Map](docs/register_map.md)
-- [Instruction Set](docs/instruction_set.md)
