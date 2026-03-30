@@ -4,7 +4,13 @@ This project is an FPGA-based qubit-control and experimentation platform built u
 
 The system is designed to keep setup simple and low cost, requiring only a USB/UART link between the FPGA and the host. To support easy bring-up and debugging, the hardware can generate human-readable JSON debug output that can be monitored with your favorite serial terminal software or the included Python tools. An intuitive browser-based web UI and a command-line menu interface are provided for loading register values, programming instruction memory, calibrating |0> and |1> reference states, and running experiments.
 
+## Top level diagram
+
 ![qubit-fpga-kit top level block diagram](docs/diagrams/qu%20control.drawio.svg)
+
+## Sample UI
+
+
 
 ## Requirements
 
@@ -53,15 +59,15 @@ pip install -e .
 This is recommended because the host application is launched as a Python module:
 
 ```bash
-python -m qubit_sim.uart_server --port COM<your port #> --debug --log_file <log file name> --ui --ui_host 127.0.0.1 --ui_port 5000
+python -m qubit_sim.uart_server --port COM[port-number] --debug --log_file [log-file-name] --ui --ui_host 127.0.0.1 --ui_port 5000
 ```
 
 ### 5. Connect the FPGA hardware
 
 You will need:
 
-- A Xilinx FPGA evaluation board programmed with the project bitstream and using the onboard UART interface
-- This project is built on the KCU105 evaluation board but can be run on any FPGA board with a UART/USB interface by simply updating the pinout constraints for your board
+- A Xilinx FPGA evaluation board programmed with the project bitstream using the onboard UART interface
+- This project is built on the KCU105 evaluation board but can be run on any FPGA board with a UART/USB interface by simply updating the pinout constraints for your board [KCU105 bitstream](build/vivado/bit/qu_control_top.bit)
 - A USB connection between the FPGA board and the host PC
 - The UART serial port driver for your system and associated COM port
 
@@ -70,7 +76,7 @@ You will need:
 Start the UART server with your FPGA serial port:
 
 ```bash
-python -m qubit_sim.uart_server --port COM<your port #> --debug --log_file <log file name> --ui --ui_host 127.0.0.1 --ui_port 5000
+python -m qubit_sim.uart_server --port COM[port-number] --debug --log_file [log-file-name] --ui --ui_host 127.0.0.1 --ui_port 5000
 ```
 
 Useful command-line options include:
