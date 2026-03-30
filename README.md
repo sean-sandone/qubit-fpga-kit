@@ -8,9 +8,9 @@ The system is designed to keep setup simple and low cost, requiring only a USB/U
 
 ![qubit-fpga-kit top level block diagram](docs/diagrams/qu%20control.drawio.svg)
 
-## Sample UI
+## Sample Web UI
 
-
+![Sample Web UI](docs/images/sample_web_ui.PNG)
 
 ## Requirements
 
