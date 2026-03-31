@@ -73,7 +73,7 @@ python -m qubit_sim.uart_server --port COM[port-number] --debug --log_file [log-
 You will need:
 
 - A Xilinx FPGA evaluation board programmed with the project bitstream using the onboard UART interface
-- This project is built on the KCU105 evaluation board but can be run on any FPGA board with a UART/USB interface by simply updating the pinout constraints for your board [KCU105 bitstream](build/vivado/bit/qu_control_top.bit)
+- This project is built on the KCU105 evaluation board but can be run on any FPGA board with a UART/USB interface by simply updating the pinout constraints for your board. [KCU105 specific bitstream](build/vivado/bit/qu_control_top.bit)
 - A USB connection between the FPGA board and the host PC
 - The UART serial port driver for your system and associated COM port
 
@@ -88,9 +88,6 @@ python -m qubit_sim.uart_server --port COM[port-number] --debug --log_file [log-
 Useful command-line options include:
 
 - `--baud` default `115200`
-- `--fs_hz` default `250e6`
-- `--if_hz` default `50e6`
-- `--omega_max_hz` default `2e6`
 - `--timeout_s` default `0.2`
 - `--debug`
 - `--log_file <path>`
@@ -156,3 +153,12 @@ Loading a JSON config updates the local shadow values and sends writable registe
 - The UART text command path currently supports `PING`, `RESET`, `PLAY`, and `MEASURE`. `PLAY` renders and applies a pulse, while `MEASURE` returns readout waveform samples.
 - Returned readout waveform data is packed into a binary UART packet using interleaved signed Q2.14 I/Q samples with header `[0xA5][0x5A][0x02][N]`.
 
+## Third-Party Components
+
+This project uses the following third-party UART core:
+
+- **SIMPLE UART FOR FPGA** by Jakub Cabal  
+  Source: https://github.com/jakubcabal/uart-for-fpga  
+  License: MIT
+
+The embedded UART RTL is reused from the above project. Integration of the UART into this system, along with the surrounding FPGA control logic, register architecture, instruction sequencing, host software, simulation flow, UI, and overall system design, is original to this project.
