@@ -73,10 +73,10 @@ def _build_tx_terminal_summary(resp: Dict[str, Any]) -> str:
     Keep full arrays out of the terminal, but still show useful stats.
     """
     if not isinstance(resp, dict):
-        return f"TX {resp}"
+        return f'DEBUG {resp}'
 
     if not resp.get("ok", False):
-        return f"TX {json.dumps(resp)}"
+        return f"DEBUG {json.dumps(resp)}"
 
     i_vals = resp.get("I")
     q_vals = resp.get("Q")
@@ -91,14 +91,14 @@ def _build_tx_terminal_summary(resp: Dict[str, Any]) -> str:
         q_max = max(q_vals) if q_vals else 0.0
 
         return (
-            "TX "
+            "DEBUG "
             f'{{"ok": true, "n": {int(n) if n is not None else len(i_vals)}, '
             f'"I_avg": {i_avg:.6f}, "Q_avg": {q_avg:.6f}, '
             f'"I_min": {i_min:.6f}, "I_max": {i_max:.6f}, '
             f'"Q_min": {q_min:.6f}, "Q_max": {q_max:.6f}}}'
         )
 
-    return f"TX {json.dumps(resp)}"
+    return f"DEBUG {json.dumps(resp)}"
 
 
 def _parse_int_like(x: Any, default: int = 0) -> int:
@@ -442,10 +442,10 @@ def _process_rx_text_line(
         tx_text = json.dumps(resp)
 
         if debug:
-            _debug_log(f"INFO {tx_text}", debug=True, log_path=None)
+            _debug_log(f"DEBUG {tx_text}", debug=True, log_path=None)
 
         if log_path is not None:
-            _debug_log(f"INFO {tx_text}", debug=False, log_path=log_path)
+            _debug_log(f"DEBUG {tx_text}", debug=False, log_path=log_path)
 
         return
 
@@ -495,10 +495,10 @@ def _process_rx_text_line(
             tx_text = json.dumps(err_resp)
 
             if debug:
-                _debug_log(f"INFO {tx_text}", debug=True, log_path=None)
+                _debug_log(f"DEBUG {tx_text}", debug=True, log_path=None)
 
             if log_path is not None:
-                _debug_log(f"INFO {tx_text}", debug=False, log_path=log_path)
+                _debug_log(f"DEBUG {tx_text}", debug=False, log_path=log_path)
 
             return
 
@@ -535,26 +535,13 @@ def _process_rx_text_line(
         ser.flush()
         return
 
-    if cmd == "RESET":
-        tx_text = json.dumps(resp)
-
-        if debug:
-            _debug_log(f"TX {tx_text}", debug=True, log_path=None)
-
-        if log_path is not None:
-            _debug_log(f"TX {tx_text}", debug=False, log_path=log_path)
-
-        ser.write((tx_text + "\n").encode("utf-8"))
-        ser.flush()
-        return
-
     tx_text = json.dumps(resp)
 
     if debug:
-        _debug_log(f"INFO {tx_text}", debug=True, log_path=None)
+        _debug_log(f"DEBUG {tx_text}", debug=True, log_path=None)
 
     if log_path is not None:
-        _debug_log(f"INFO {tx_text}", debug=False, log_path=log_path)
+        _debug_log(f"DEBUG {tx_text}", debug=False, log_path=log_path)
 
 
 class _MixedRxParser:
