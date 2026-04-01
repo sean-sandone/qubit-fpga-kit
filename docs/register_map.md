@@ -209,19 +209,19 @@ All other measure config entries remain invalid until explicitly written.
 
 | Instr addr | Opcode | `cfg_index` | `operand` | Meaning |
 |---:|---|---:|---:|---|
-| 0 | `ACCUM_CLEAR` | 0 | 0 | Clear accumulator before `|0>` calibration |
-| 1 | `WAIT_RESET` | 0 | 0 | Wait reset interval before `|0>` calibration shot |
+| 0 | `ACCUM_CLEAR` | 0 | 0 | Clear accumulator before \|0> calibration |
+| 1 | `WAIT_RESET` | 0 | 0 | Wait reset interval before \|0> calibration shot |
 | 2 | `MEASURE` | 0 | 0 | Measure with measure config 0 |
 | 3 | `ACCUM` | 0 | 0 | Accumulate measured `I_avg/Q_avg` |
 | 4 | `LOOP` | 0 | `0x00201` | Repeat instruction 1 body for 3 total passes |
-| 5 | `ACCUM_AVG` | 0 | `1` | Store average to `|0>` references |
-| 6 | `ACCUM_CLEAR` | 0 | 0 | Clear accumulator before `|1>` calibration |
-| 7 | `WAIT_RESET` | 0 | 0 | Wait reset interval before `|1>` calibration shot |
-| 8 | `PLAY` | 1 | 0 | Apply play config 1 to prepare `|1>` |
+| 5 | `ACCUM_AVG` | 0 | `1` | Store average to \|0>  references |
+| 6 | `ACCUM_CLEAR` | 0 | 0 | Clear accumulator before \|1>  calibration |
+| 7 | `WAIT_RESET` | 0 | 0 | Wait reset interval before \|1> calibration shot |
+| 8 | `PLAY` | 1 | 0 | Apply play config 1 to prepare \|1> |
 | 9 | `MEASURE` | 1 | 0 | Measure with measure config 1 |
 | 10 | `ACCUM` | 0 | 0 | Accumulate measured `I_avg/Q_avg` |
 | 11 | `LOOP` | 0 | `0x00207` | Repeat instruction 7 body for 3 total passes |
-| 12 | `ACCUM_AVG` | 0 | `2` | Store average to `|1>` references |
+| 12 | `ACCUM_AVG` | 0 | `2` | Store average to \|1> references |
 | 13 | `WAIT_RESET` | 0 | 0 | Reset before test sequence |
 | 14 | `PLAY` | 0 | 0 | Apply play config 0 |
 | 15 | `WAIT` | 0 | 100 | Wait 100 cycles |
