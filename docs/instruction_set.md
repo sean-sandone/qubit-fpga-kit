@@ -1,6 +1,6 @@
 # Instruction Set
 
-Instruction word format and opcode behavior implemented by the current RTL.
+Instruction word format and opcode behavior
 
 ## Instruction Word Format
 
@@ -60,9 +60,9 @@ The accumulator finalize/store destination is encoded in `operand[1:0]`:
 
 | Value | Symbol | Meaning |
 |---:|---|---|
-| `0` | `CAL_DEST_TEMP` | Finalize average without updating `|0>` or `|1>` references |
-| `1` | `CAL_DEST_REF0` | Store finalized average to `|0>` reference registers |
-| `2` | `CAL_DEST_REF1` | Store finalized average to `|1>` reference registers |
+| `0` | `CAL_DEST_TEMP` | Finalize average without updating \|0> or \|1> references |
+| `1` | `CAL_DEST_REF0` | Store finalized average to \|0> reference registers |
+| `2` | `CAL_DEST_REF1` | Store finalized average to \|1> reference registers |
 
 ## `LOOP` Encoding
 
@@ -134,9 +134,9 @@ Advances program counter by 1.
 
 ### `WAIT_RESET`
 
-- Forces `cfg_index = 0`
 - Marks the formatter transaction as a reset event rather than a play event
 - Uses `reset_wait_cycles` rather than the instruction operand for the wait duration
+- In the current design, `WAIT_RESET` is used in place of passive qubit relaxation back to \|0>. Rather than modeling natural time-dependent relaxation and dephasing in a standalone wait period, the reset path explicitly forces the simulated qubit back to the ground state.
 
 ### `ACCUM_CLEAR`
 

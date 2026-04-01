@@ -1,6 +1,6 @@
 # Register Map
 
-Logical register and memory contents implemented by the RTL.
+Logical register and memory contents
 
 ## Overview
 
@@ -35,19 +35,19 @@ These are the logical scalar registers exposed by `register_bank`.
 | `cal_sample_count` | 16 | unsigned | Number of samples accumulated in calibration averaging | `0` |
 | `cal_i_avg` | 16 | signed | Latest averaged I result from calibration accumulator path | `0` |
 | `cal_q_avg` | 16 | signed | Latest averaged Q result from calibration accumulator path | `0` |
-| `cal_i0_ref` | 16 | signed | Stored I reference for prepared `|0>` | `0` |
-| `cal_q0_ref` | 16 | signed | Stored Q reference for prepared `|0>` | `0` |
-| `cal_i1_ref` | 16 | signed | Stored I reference for prepared `|1>` | `0` |
-| `cal_q1_ref` | 16 | signed | Stored Q reference for prepared `|1>` | `0` |
-| `cal_i_threshold` | 16 | signed | Threshold derived from `|0>` and `|1>` I references | `0` |
+| `cal_i0_ref` | 16 | signed | Stored I reference for prepared \|0> | `0` |
+| `cal_q0_ref` | 16 | signed | Stored Q reference for prepared \|0> | `0` |
+| `cal_i1_ref` | 16 | signed | Stored I reference for prepared \|1> | `0` |
+| `cal_q1_ref` | 16 | signed | Stored Q reference for prepared \|1> | `0` |
+| `cal_i_threshold` | 16 | signed | Threshold derived from \|0> and \|1> I references | `0` |
 | `cal_state_polarity` | 1 | status | Indicates which side of the threshold corresponds to state `1` | `0` |
-| `cal_i0q0_valid` | 1 | status | `|0>` reference valid | `0` |
-| `cal_i1q1_valid` | 1 | status | `|1>` reference valid | `0` |
+| `cal_i0q0_valid` | 1 | status | \|0> reference valid | `0` |
+| `cal_i1q1_valid` | 1 | status | \|1> reference valid | `0` |
 | `cal_threshold_valid` | 1 | status | Threshold valid | `0` |
 | `meas_state` | 1 | status | Thresholded measurement state result | `0` |
 | `meas_state_valid` | 1 | status | High when `meas_state` is valid | `0` |
 | `cal_debug_update_pulse` | 1 | debug pulse | Pulses when calibration references are updated | `0` |
-| `cal_debug_ref0_sel` | 1 | debug status | `1` when the last calibration write targeted `|0>`, else `|1>` | `0` |
+| `cal_debug_ref0_sel` | 1 | debug status | `1` when the last calibration write targeted \|0>, else \|1> | `0` |
 
 ## Control Register Write Packet
 
@@ -185,7 +185,7 @@ Instruction words are written little-endian on the UART and unpack into:
 | Entry | `amp_q8_8` | `phase_q8_8` | `duration_ns` | `sigma_ns` | `pad_ns` | `detune_hz` | `envelope` | Notes |
 |---:|---:|---:|---:|---:|---:|---:|---|---|
 | 0 | `0x0100` | `0x0000` | 200 | 30 | 200 | 0 | `ENV_GAUSS` | Nominal pulse |
-| 1 | `0x0330` | `0x0000` | 200 | 30 | 200 | 0 | `ENV_GAUSS` | Stronger `|1>` prep candidate |
+| 1 | `0x0330` | `0x0000` | 200 | 30 | 200 | 0 | `ENV_GAUSS` | Stronger \|1> prep candidate |
 | 2 | `0x0080` | `0x0100` | 200 | 30 | 200 | 0 | `ENV_GAUSS` | Secondary test pulse |
 
 All other play config entries remain invalid until explicitly written.
@@ -209,19 +209,19 @@ All other measure config entries remain invalid until explicitly written.
 
 | Instr addr | Opcode | `cfg_index` | `operand` | Meaning |
 |---:|---|---:|---:|---|
-| 0 | `ACCUM_CLEAR` | 0 | 0 | Clear accumulator before `|0>` calibration |
-| 1 | `WAIT_RESET` | 0 | 0 | Wait reset interval before `|0>` calibration shot |
+| 0 | `ACCUM_CLEAR` | 0 | 0 | Clear accumulator before \|0> calibration |
+| 1 | `WAIT_RESET` | 0 | 0 | Wait reset interval before \|0> calibration shot |
 | 2 | `MEASURE` | 0 | 0 | Measure with measure config 0 |
 | 3 | `ACCUM` | 0 | 0 | Accumulate measured `I_avg/Q_avg` |
 | 4 | `LOOP` | 0 | `0x00201` | Repeat instruction 1 body for 3 total passes |
-| 5 | `ACCUM_AVG` | 0 | `1` | Store average to `|0>` references |
-| 6 | `ACCUM_CLEAR` | 0 | 0 | Clear accumulator before `|1>` calibration |
-| 7 | `WAIT_RESET` | 0 | 0 | Wait reset interval before `|1>` calibration shot |
-| 8 | `PLAY` | 1 | 0 | Apply play config 1 to prepare `|1>` |
+| 5 | `ACCUM_AVG` | 0 | `1` | Store average to \|0> references |
+| 6 | `ACCUM_CLEAR` | 0 | 0 | Clear accumulator before \|1> calibration |
+| 7 | `WAIT_RESET` | 0 | 0 | Wait reset interval before \|1> calibration shot |
+| 8 | `PLAY` | 1 | 0 | Apply play config 1 to prepare \|1> |
 | 9 | `MEASURE` | 1 | 0 | Measure with measure config 1 |
 | 10 | `ACCUM` | 0 | 0 | Accumulate measured `I_avg/Q_avg` |
 | 11 | `LOOP` | 0 | `0x00207` | Repeat instruction 7 body for 3 total passes |
-| 12 | `ACCUM_AVG` | 0 | `2` | Store average to `|1>` references |
+| 12 | `ACCUM_AVG` | 0 | `2` | Store average to \|1> references |
 | 13 | `WAIT_RESET` | 0 | 0 | Reset before test sequence |
 | 14 | `PLAY` | 0 | 0 | Apply play config 0 |
 | 15 | `WAIT` | 0 | 100 | Wait 100 cycles |
