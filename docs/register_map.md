@@ -17,9 +17,9 @@ Sizing is defined in `rtl_pkg.sv`:
 - `MeasCfgDepth = 4`
 - `InstrDepth = 32`
 
-## Scalar Registers
+## Control, Status, and Calibration Registers
 
-These are the logical scalar registers exposed by `register_bank`.
+These are the *single value* registers.
 
 | Register | Width | Type | Description | Reset value |
 |---|---:|---|---|---:|
