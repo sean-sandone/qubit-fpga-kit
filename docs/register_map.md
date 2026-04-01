@@ -23,8 +23,8 @@ These are the *single value* registers.
 
 | Register | Width | Type | Description | Reset value |
 |---|---:|---|---|---:|
-| `start_exp` | 1 | control pulse/sticky until cleared | Starts experiment sequencing | `0` |
-| `soft_reset_req` | 1 | control pulse/sticky | Requests soft reset | `0` |
+| `start_exp` | 1 | start request latch, self-cleared on sequencer start | Starts experiment sequencing | `0` |
+| `soft_reset_req` | 1 | pulse | Requests soft reset | `0` |
 | `read_all_pulse` | 1 | pulse | Requests full register dump/readback | `0` |
 | `reset_wait_cycles` | 32 | unsigned | Wait interval used by `WAIT_RESET` | `0` after reset, default ROM preloads `1000` |
 | `play_cfg_any_valid` | 1 | status | High when any play config entry is valid | `0` |
