@@ -1,6 +1,7 @@
 # Theory of Operation
 
 The FPGA serves as the real-time experiment controller, supporting the full control loop by orchestrating qubit control pulses and receiving, processing, and evaluating qubit measurement data. Transmitting fully sampled I/Q waveforms over a low-speed UART link would be impractical, so a "Virtual FPGA Waveform Generator" is implemented in software. This software layer takes compact waveform descriptions sent by the FPGA and expands them into the pulse waveforms ultimately applied to a simulated qubit in the QuTiP environment. This design keeps the system accessible and inexpensive by enabling development on a simple FPGA evaluation board while preserving the control flow of a pulse-programmed quantum experiment. Because the project's primary goal is to validate sequencing, control, measurement, and calibration behavior, rather than implement a high-speed RF signal chain, waveform synthesis was intentionally moved into software.
+The current default simulator configuration is effectively time-agnostic with respect to qubit relaxation and dephasing between operations. In the default setup, qubit-state decay over time is disabled, so instruction timing and wait intervals do not currently model T1/T2-driven state decay. This keeps the environment focused on validating control flow, pulse sequencing, measurement handling, and calibration behavior. Future configurations may enable time-dependent decoherence with a project wide, slowed time scale.
 
 ## Qubit Control via I/Q Pulses
 
