@@ -136,7 +136,7 @@ Advances program counter by 1.
 
 - Marks the formatter transaction as a reset event rather than a play event
 - Uses `reset_wait_cycles` rather than the instruction operand for the wait duration
-- In the current simulator flow, `WAIT_RESET` is used as a practical substitute for passive qubit relaxation back to \|0>. The present design is effectively time-agnostic with respect to decay between operations, and the host-side reset path explicitly returns the simulated qubit to the ground state rather than modeling natural T1/T2 decay during the wait interval.
+- In the current design, `WAIT_RESET` is used in place of passive qubit relaxation back to \|0>. Rather than modeling natural time-dependent relaxation and dephasing in a standalone wait period, the reset path explicitly forces the simulated qubit back to the ground state.
 
 ### `ACCUM_CLEAR`
 
