@@ -1,6 +1,6 @@
 # Instruction Set
 
-Instruction word format and opcode behavior implemented by the current RTL.
+Instruction word format and opcode behavior
 
 ## Instruction Word Format
 
@@ -60,9 +60,9 @@ The accumulator finalize/store destination is encoded in `operand[1:0]`:
 
 | Value | Symbol | Meaning |
 |---:|---|---|
-| `0` | `CAL_DEST_TEMP` | Finalize average without updating `|0>` or `|1>` references |
-| `1` | `CAL_DEST_REF0` | Store finalized average to `|0>` reference registers |
-| `2` | `CAL_DEST_REF1` | Store finalized average to `|1>` reference registers |
+| `0` | `CAL_DEST_TEMP` | Finalize average without updating \|0> or \|1> references |
+| `1` | `CAL_DEST_REF0` | Store finalized average to \|0> reference registers |
+| `2` | `CAL_DEST_REF1` | Store finalized average to \|1> reference registers |
 
 ## `LOOP` Encoding
 
